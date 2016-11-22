@@ -1,13 +1,20 @@
 package main
 
 import (
+	"flag"
 	"libvirt.org/libvirt-kubelet/pkg/service"
 	"os"
 )
 
-func main() {
+var (
+	listen = flag.String("listen", "/run/libvirt-kubelet.sock",
+		"UNIX socket path to listen on")
+)
 
-	svc, err := service.New("/run/libvirt-kubelet.sock")
+func main() {
+	flag.Parse()
+
+	svc, err := service.New(*listen)
 	if err != nil {
 		os.Exit(1)
 	}
