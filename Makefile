@@ -3,7 +3,12 @@ COMMANDS = libvirt-kubelet
 
 BINARIES = $(COMMANDS:%=build/%)
 
+TEST_DIRS = libvirt/config
+
 all: $(BINARIES)
+
+check:
+	go test $(TEST_DIRS:%=libvirt.org/libvirt-kubelet/pkg/%)
 
 $(BINARIES): .vendor.status
 
