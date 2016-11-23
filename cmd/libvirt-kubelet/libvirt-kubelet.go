@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"libvirt.org/libvirt-kubelet/pkg/service"
 	"os"
 )
@@ -16,11 +17,13 @@ func main() {
 
 	svc, err := service.New(*listen)
 	if err != nil {
+		fmt.Print(err)
 		os.Exit(1)
 	}
 
 	err = svc.Run()
 	if err != nil {
+		fmt.Print(err)
 		os.Exit(1)
 	}
 
