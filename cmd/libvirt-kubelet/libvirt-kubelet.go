@@ -17,13 +17,13 @@ func main() {
 
 	svc, err := service.New(*listen)
 	if err != nil {
-		fmt.Print(err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	err = svc.Run()
 	if err != nil {
-		fmt.Print(err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
