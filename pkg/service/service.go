@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -10,18 +11,30 @@ import (
 	"google.golang.org/grpc"
 
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
+
+	"libvirt.org/libvirt-kubelet/pkg/nodeinfo"
+
+	"github.com/libvirt/libvirt-go"
+	"github.com/libvirt/libvirt-go-xml"
 )
 
 type LibvirtKubeletService struct {
-	server *grpc.Server
-	addr   string
+	server      *grpc.Server
+	kubeletAddr string
+	hypervisor  *libvirt.Connect
 }
 
-func New(addr string) (*LibvirtKubeletService, error) {
+func New(kubeletAddr string, libvirtURI string) (*LibvirtKubeletService, error) {
+
+	hypervisor, err := libvirt.NewConnect(libvirtURI)
+	if err != nil {
+		return nil, err
+	}
 
 	svc := &LibvirtKubeletService{
-		server: grpc.NewServer(),
-		addr:   addr,
+		server:      grpc.NewServer(),
+		kubeletAddr: kubeletAddr,
+		hypervisor:  hypervisor,
 	}
 
 	runtime.RegisterRuntimeServiceServer(svc.server, svc)
@@ -33,15 +46,36 @@ func New(addr string) (*LibvirtKubeletService, error) {
 
 func (s *LibvirtKubeletService) Run() error {
 
-	err := syscall.Unlink(s.addr)
+	err := syscall.Unlink(s.kubeletAddr)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
-	sock, err := net.Listen("unix", s.addr)
+	sock, err := net.Listen("unix", s.kubeletAddr)
 	if err != nil {
 		return err
 	}
+
+	capsXML, err := s.hypervisor.GetCapabilities()
+	if err != nil {
+		return err
+	}
+
+	caps := &libvirtxml.Caps{}
+	err = caps.Unmarshal(capsXML)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(caps)
+
+	nodeinfo, err := nodeinfo.NewNodeInfo(caps, s.hypervisor)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(nodeinfo)
 
 	defer sock.Close()
 	return s.server.Serve(sock)

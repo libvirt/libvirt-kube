@@ -1,14 +1,13 @@
 package: libvirt.org/libvirt-kubelet
 import:
-- package: github.com/rgbkrk/libvirt-go
-- package: github.com/golang/protobuf/proto
 - package: github.com/gogo/protobuf/proto
+- package: github.com/golang/protobuf/proto
+- package: github.com/libvirt/libvirt-go
+- package: github.com/libvirt/libvirt-go-xml
 - package: golang.org/x/net
   subpackages:
   - context
 - package: google.golang.org/grpc
 - package: k8s.io/kubernetes
-  repo: git://github.com/kubernetes/kubernetes.git
   subpackages:
   - pkg/kubelet/api/v1alpha1/runtime
-  - api/v1alpha/runtime
