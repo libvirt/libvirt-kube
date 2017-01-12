@@ -18,10 +18,19 @@ import (
 	"github.com/libvirt/libvirt-go-xml"
 )
 
+const (
+	// Must match version defined by kubelet in pkg/kubelet/kuberuntime/kuberuntime_manager.go
+	// ref https://github.com/kubernetes/kubernetes/issues/28642
+	kubeAPIVersion = "0.1.0"
+	runtimeName    = "libvirt"
+	runtimeVersion = "1.0.0"
+)
+
 type LibvirtKubeletService struct {
-	server      *grpc.Server
-	kubeletAddr string
-	hypervisor  *libvirt.Connect
+	server            *grpc.Server
+	kubeletAddr       string
+	hypervisor        *libvirt.Connect
+	hypervisorVersion uint32
 }
 
 func New(kubeletAddr string, libvirtURI string) (*LibvirtKubeletService, error) {
@@ -31,10 +40,17 @@ func New(kubeletAddr string, libvirtURI string) (*LibvirtKubeletService, error) 
 		return nil, err
 	}
 
+	ver, err := hypervisor.GetLibVersion()
+	if err != nil {
+		hypervisor.Close()
+		return nil, err
+	}
+
 	svc := &LibvirtKubeletService{
-		server:      grpc.NewServer(),
-		kubeletAddr: kubeletAddr,
-		hypervisor:  hypervisor,
+		server:            grpc.NewServer(),
+		kubeletAddr:       kubeletAddr,
+		hypervisor:        hypervisor,
+		hypervisorVersion: ver,
 	}
 
 	runtime.RegisterRuntimeServiceServer(svc.server, svc)
@@ -83,7 +99,20 @@ func (s *LibvirtKubeletService) Run() error {
 
 // Version returns the runtime name, runtime version, and runtime API version.
 func (s *LibvirtKubeletService) Version(ctx context.Context, req *runtime.VersionRequest) (*runtime.VersionResponse, error) {
-	return nil, errors.New("not implemented")
+	apiVersion := fmt.Sprintf("%d.%d.%d",
+		(s.hypervisorVersion/(1000*1000))%1000,
+		(s.hypervisorVersion/1000)%1000,
+		s.hypervisorVersion%1000)
+
+	localVersion := kubeAPIVersion
+	localRuntimeName := runtimeName
+	localRuntimeVersion := runtimeVersion
+	return &runtime.VersionResponse{
+		Version:           &localVersion,
+		RuntimeName:       &localRuntimeName,
+		RuntimeVersion:    &localRuntimeVersion,
+		RuntimeApiVersion: &apiVersion,
+	}, nil
 }
 
 // RunPodSandbox creates and starts a pod-level sandbox. Runtimes must ensure
@@ -120,7 +149,8 @@ func (s *LibvirtKubeletService) PodSandboxStatus(ctx context.Context, req *runti
 
 // ListPodSandbox returns a list of PodSandboxes.
 func (s *LibvirtKubeletService) ListPodSandbox(ctx context.Context, req *runtime.ListPodSandboxRequest) (*runtime.ListPodSandboxResponse, error) {
-	return nil, errors.New("not implemented")
+	sandboxes := []*runtime.PodSandbox{}
+	return &runtime.ListPodSandboxResponse{Items: sandboxes}, nil
 }
 
 // CreateContainer creates a new container in specified PodSandbox
@@ -151,7 +181,8 @@ func (s *LibvirtKubeletService) RemoveContainer(ctx context.Context, req *runtim
 
 // ListContainers lists all containers by filters.
 func (s *LibvirtKubeletService) ListContainers(ctx context.Context, req *runtime.ListContainersRequest) (*runtime.ListContainersResponse, error) {
-	return nil, errors.New("not implemented")
+	containers := []*runtime.Container{}
+	return &runtime.ListContainersResponse{Containers: containers}, nil
 }
 
 // ContainerStatus returns status of the container.
@@ -186,12 +217,30 @@ func (s *LibvirtKubeletService) UpdateRuntimeConfig(ctx context.Context, req *ru
 
 // Status returns the status of the runtime.
 func (s *LibvirtKubeletService) Status(ctx context.Context, req *runtime.StatusRequest) (*runtime.StatusResponse, error) {
-	return nil, errors.New("not implemented")
+	ready := true
+	runtimeReadyStr := runtime.RuntimeReady
+	networkReadyStr := runtime.NetworkReady
+	status := runtime.RuntimeStatus{
+		Conditions: []*runtime.RuntimeCondition{
+			{
+				Type:   &runtimeReadyStr,
+				Status: &ready,
+			},
+			{
+				Type:   &networkReadyStr,
+				Status: &ready,
+			},
+		},
+	}
+	return &runtime.StatusResponse{
+		Status: &status,
+	}, nil
 }
 
 // ListImages lists existing images.
 func (s *LibvirtKubeletService) ListImages(ctx context.Context, req *runtime.ListImagesRequest) (*runtime.ListImagesResponse, error) {
-	return nil, errors.New("not implemented")
+	images := []*runtime.Image{}
+	return &runtime.ListImagesResponse{Images: images}, nil
 }
 
 // ImageStatus returns the status of the image. If the image is not
