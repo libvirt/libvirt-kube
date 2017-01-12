@@ -212,7 +212,7 @@ func (s *LibvirtKubeletService) PortForward(ctx context.Context, req *runtime.Po
 
 // UpdateRuntimeConfig updates the runtime configuration based on the given request.
 func (s *LibvirtKubeletService) UpdateRuntimeConfig(ctx context.Context, req *runtime.UpdateRuntimeConfigRequest) (*runtime.UpdateRuntimeConfigResponse, error) {
-	return nil, errors.New("not implemented")
+	return &runtime.UpdateRuntimeConfigResponse{}, nil
 }
 
 // Status returns the status of the runtime.
@@ -239,24 +239,51 @@ func (s *LibvirtKubeletService) Status(ctx context.Context, req *runtime.StatusR
 
 // ListImages lists existing images.
 func (s *LibvirtKubeletService) ListImages(ctx context.Context, req *runtime.ListImagesRequest) (*runtime.ListImagesResponse, error) {
-	images := []*runtime.Image{}
+	hostImageName := "host"
+	hostImage := &runtime.Image{
+		Id: &hostImageName,
+	}
+
+	images := []*runtime.Image{
+		hostImage,
+	}
 	return &runtime.ListImagesResponse{Images: images}, nil
 }
 
 // ImageStatus returns the status of the image. If the image is not
 // present, returns nil.
 func (s *LibvirtKubeletService) ImageStatus(ctx context.Context, req *runtime.ImageStatusRequest) (*runtime.ImageStatusResponse, error) {
-	return nil, errors.New("not implemented")
+	imageSpec := req.Image
+	if *imageSpec.Image != "host" {
+		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
+	}
+
+	hostImageName := "host"
+	hostImage := &runtime.Image{
+		Id: &hostImageName,
+	}
+
+	return &runtime.ImageStatusResponse{Image: hostImage}, nil
 }
 
 // PullImage pulls an image with authentication config.
 func (s *LibvirtKubeletService) PullImage(ctx context.Context, req *runtime.PullImageRequest) (*runtime.PullImageResponse, error) {
-	return nil, errors.New("not implemented")
+	imageSpec := req.Image
+	if *imageSpec.Image != "host" {
+		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
+	}
+
+	return &runtime.PullImageResponse{}, nil
 }
 
 // RemoveImage removes the image.
 // This call is idempotent, and must not return an error if the image has
 // already been removed.
 func (s *LibvirtKubeletService) RemoveImage(ctx context.Context, req *runtime.RemoveImageRequest) (*runtime.RemoveImageResponse, error) {
-	return nil, errors.New("not implemented")
+	imageSpec := req.Image
+	if *imageSpec.Image != "host" {
+		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
+	}
+
+	return nil, errors.New("Host image can not be removed")
 }
