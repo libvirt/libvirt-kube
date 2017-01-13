@@ -1,4 +1,4 @@
-package: libvirt.org/libvirt-kubelet
+package: libvirt.org/libvirt-kube
 import:
 - package: github.com/gogo/protobuf/proto
 - package: github.com/golang/protobuf/proto

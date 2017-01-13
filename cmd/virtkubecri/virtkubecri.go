@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"libvirt.org/libvirt-kubelet/pkg/service"
+	"libvirt.org/libvirt-kube/pkg/service"
 	"os"
 )
 

@@ -10,7 +10,7 @@ TEST_DIRS = libvirt/config
 all: $(BINARIES)
 
 check:
-	go test $(TEST_DIRS:%=libvirt.org/libvirt-kubelet/pkg/%)
+	go test $(TEST_DIRS:%=libvirt.org/libvirt-kube/pkg/%)
 
 $(BINARIES): .vendor.status $(SRC)
 

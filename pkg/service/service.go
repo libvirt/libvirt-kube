@@ -12,7 +12,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 
-	"libvirt.org/libvirt-kubelet/pkg/nodeinfo"
+	"libvirt.org/libvirt-kube/pkg/nodeinfo"
 
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
