@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	listen = flag.String("listen", "/run/libvirt-kubelet.sock",
+	listen = flag.String("listen", "/run/libvirt/virtkubecri.sock",
 		"UNIX socket path to listen on")
 	connect = flag.String("connect", "qemu:///system",
 		"Libvirt connection URI")

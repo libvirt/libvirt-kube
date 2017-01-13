@@ -1,5 +1,5 @@
 
-COMMANDS = libvirt-kubelet
+COMMANDS = virtkubecri
 
 BINARIES = $(COMMANDS:%=build/%)
 
@@ -22,5 +22,5 @@ $(BINARIES): .vendor.status $(SRC)
 	fi && touch $@
 
 
-build/libvirt-kubelet: cmd/libvirt-kubelet
+build/%: cmd/%
 	go build -o $@ ./$<
