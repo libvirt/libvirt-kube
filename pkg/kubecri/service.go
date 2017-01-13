@@ -1,4 +1,4 @@
-package service
+package kubecri
 
 import (
 	"errors"
@@ -33,7 +33,7 @@ type LibvirtKubeletService struct {
 	hypervisorVersion uint32
 }
 
-func New(kubeletAddr string, libvirtURI string) (*LibvirtKubeletService, error) {
+func NewService(kubeletAddr string, libvirtURI string) (*LibvirtKubeletService, error) {
 
 	hypervisor, err := libvirt.NewConnect(libvirtURI)
 	if err != nil {

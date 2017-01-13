@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"libvirt.org/libvirt-kube/pkg/service"
+	"libvirt.org/libvirt-kube/pkg/kubecri"
 	"os"
 )
 
@@ -17,7 +17,7 @@ var (
 func main() {
 	flag.Parse()
 
-	svc, err := service.New(*listen, *connect)
+	svc, err := kubecri.NewService(*listen, *connect)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
