@@ -1,0 +1,36 @@
+          libvirt-kubelet README
+	  ======================
+
+The libvirt-kubelet project provides integration for running libvirt
+guests through the Kubernetes framework, with a particular focus on
+use of KVM virtual machines for running full operating system images. 
+
+The project is distributed under the terms of the Apache License 2.0.
+Refer to the LICENSE file for full legal terms and conditions.
+
+Source repository
+-----------------
+
+The master source repository for the project is hosted on libvirt.org
+
+   http://libvirt.org/git/?p=libvirt-kube.git
+   git://libvirt.org/libvirt-kube.git
+
+For the purposes of Go build, the package is considered to be in
+the namespace "libvirt.org/libvirt-kube"
+
+Building
+--------
+
+The project uses Go vendoring, but the 3rd party deps are not checked
+into git. Use of the "glide" tool is required to import the 3rd party
+deps prior to build
+
+  $ go get github.com/Masterminds/glide
+
+A Makefile is provided to simpify the proces of fetching deps and
+building commands
+
+  $ make
+
+The generated binaries will get created in the dir build/
