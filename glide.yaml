@@ -8,6 +8,12 @@ import:
   subpackages:
   - context
 - package: google.golang.org/grpc
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
+- package: k8s.io/client-go
+  subpackages:
+  - pkg/api/v1
 - package: k8s.io/kubernetes
   subpackages:
   - pkg/kubelet/api/v1alpha1/runtime
