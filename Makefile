@@ -1,5 +1,5 @@
 
-COMMANDS = virtkubecri
+COMMANDS = virtkubecri virtkubevmshim
 
 BINARIES = $(COMMANDS:%=build/%)
 
@@ -8,6 +8,9 @@ SRC = $(shell find pkg -name '*.go')
 TEST_DIRS = libvirt/config
 
 all: $(BINARIES)
+
+foo:
+	echo $(BINARIES)
 
 check:
 	go test $(TEST_DIRS:%=libvirt.org/libvirt-kube/pkg/%)

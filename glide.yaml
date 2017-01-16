@@ -2,6 +2,7 @@ package: libvirt.org/libvirt-kube
 import:
 - package: github.com/gogo/protobuf/proto
 - package: github.com/golang/protobuf/proto
+- package: github.com/golang/glog
 - package: github.com/libvirt/libvirt-go
 - package: github.com/libvirt/libvirt-go-xml
 - package: github.com/twinj/uuid
