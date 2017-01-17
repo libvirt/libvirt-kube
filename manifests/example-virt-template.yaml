@@ -1,0 +1,57 @@
+--- 
+type: kvm
+arch: x86_64
+machine: pc
+boot: 
+  kernel:
+    name: vmlinuz
+    pool:
+      dir:
+        path: /home/berrange
+  kernel_args: console=ttyS0
+  ramdisk:
+    name: initrd
+    pool:
+      dir:
+        path: /home/berrange
+  type: direct
+  firmware: 
+    type: bios
+cpu: 
+  count: 4
+  features: 
+    - 
+      name: pdpe1gb
+      policy: require
+  mode: custom
+  model: Nehalem
+memory: 
+  maximum: 1000
+  present: 500
+  slots: 5
+topology: 
+  cores: 2
+  max_cores: 2
+  max_nodes: 2
+  max_sockets: 2
+  max_threads: 1
+  min_cores: 2
+  min_nodes: 2
+  min_sockets: 2
+  min_threads: 1
+  nodes: 2
+  sockets: 2
+  threads: 1
+devices: 
+  disk: 
+    - 
+      bootindex: 1
+      device: disk
+      encrypt: 
+        luks: 
+          passphrase: 123456
+      source:
+        name: disk1.img
+        pool:
+          dir:
+            path: /home/berrange
