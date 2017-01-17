@@ -1,0 +1,148 @@
+ Libvirt Kube Architecture
+ -------------------------
+
+The goal of this architecture design is to enable integration of
+libvirt with kubernetes, so that VMs can be launched and managed
+in Kubernetes with no additional complexity vs containers. To
+achieve this there are a few central requirements
+
+ - MUST not require a custom Kubelet install on the host.
+ 
+   ie the launch process has to be able to use Docker, even
+   if it is just a shim that gets escaped from
+
+ - MUST allow for a custom Kubelet install on the host
+
+   ie the launch process should be able to use a custom
+   kubelet CRI to directly launch VMs, bypassing any
+   need to use Docker
+
+ - The "container" MUST be the fundamental object that
+   causes creation of the VMs.
+
+   ie the user must be able to use "kubectl create" with
+   a container object kind. They must not be forced to
+   use a different object kind that creates the container
+   on their behalf. This is to ensure that they can still
+   use all the regular Kubernetes facilities for managing
+   containers - Deployment, CronJob, Pet Sets, Replication
+   Sets, etc must all be capable of launching VMs in the
+   normal manner
+
+ - The VM configuration MUST be part of the container image
+
+   ie the various facilities like Deployment, CronJob,
+   Pet Sets, etc must see the container image as the entire
+   thing to be launched
+
+ - The schedular MUST be able to do placement via VM info
+
+   ie libvirt specific host knowledge must be made available
+   to the scheduler so that it can refine placement decisions
+   made by the core kubernetes scheduler logic. eg restrict
+   host to those that provide a certain PCI device, or have
+   specific host CPU flags, or a specific QEMU machine type
+   available, etc
+
+ - All normal VM operations MUST be managed via Kube API
+
+   ie once the VM is running, other VM specific operations
+   have to be invoked via the Kube API in some manner.
+   This is to ensure that users don't need to use one set
+   of APIs for launch, and a different set of APIs for
+   post-launch mgmt.
+
+
+Components
+----------
+
+Bearing in mind the requirements above, the following
+components will be required
+
+ - virtkubevmshim
+
+   A shim distributed in the docker image, that is the
+   init process for the container. It reads the config
+   file from the image, and constructs the corresponding
+   XML for a specific instance. It connects to libvirtd
+   and spawns the VM. It uses AUTODESTROY flag to ensure
+   that libvirt kills the VM when the container is stopped.
+
+   This is used when running against a Kubernetes install
+   that uses Docker (or an other similar impl) as the CRI
+
+ - virtkubecri
+
+   A CRI implementation for kubelet that can read the
+   config from container image and directly talk to
+   libvirtd to launch the VM.
+
+   This allows for libvirt native integration without
+   having Docker in the mix. This reduces complexity
+   of the stack, and gives stronger guarantees about
+   VM shutdown when a container is stopped.
+
+ - virtkubenodeinfo
+
+   A process that runs on each compute node that talks
+   to libvirtd to get info about libvirt's view of the
+   host. It reports this data upto the Kube API server
+   via a custom "VirtNode" resource type, as well as
+   "VirtDomain" for each running VM.
+
+ - virtkubeapi
+
+   A process that runs in the cluster solely to register
+   the custom resource types with Kube API.
+   
+     - VirtNode provides info about the virt node.
+     - VirtTemplate provides template of a VM config.
+     - VirtDomain provides info about a running VM
+
+ - virtkubesched
+
+   A kubernetes schedular extender. This consumes info
+   from the VirtNode resource type and the VirtTemplate
+   associated with the container and uses that to
+   refine Kube's view of which host to run the VM on.
+
+
+ - virtkubeimage
+
+   Implements the Docker image registry protocol to
+   serve docker images containing the virtkubeletshim
+   and the VirtTemplate serialized configuration.
+
+
+Control flows
+=============
+
+Cluster setup flow
+------------------
+
+For a Docker based cluster:
+
+ - Deploy a "virthost" POD that provides libvirtd,
+   virtkubeletinfo and QEMU, to kube nodes
+
+For a Docker-less cluster:
+
+ - Provision Kubernetes using the virtkubetletcri
+   daemon, libvirtd, virtkubeletinfo and QEMU to
+   bare metal hosts
+
+
+ - XXX how to deploy scheduler ?
+
+VM create flow
+--------------
+
+ - User defines a template for a class of VMs. This
+   primarily focuses on defining the guest machine ABI,
+   little-to-no backend info.
+
+ - Create one or more PODs / containers that reference
+   the VM template(s), providing the backend specific
+   metadata to customize the template into a specific
+   instance
+
