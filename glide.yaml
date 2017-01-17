@@ -4,6 +4,7 @@ import:
 - package: github.com/golang/protobuf/proto
 - package: github.com/libvirt/libvirt-go
 - package: github.com/libvirt/libvirt-go-xml
+- package: github.com/twinj/uuid
 - package: golang.org/x/net
   subpackages:
   - context
