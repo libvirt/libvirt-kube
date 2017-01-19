@@ -31,10 +31,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
 
-	"libvirt.org/libvirt-kube/pkg/nodeinfo"
-
 	"github.com/libvirt/libvirt-go"
-	"github.com/libvirt/libvirt-go-xml"
 )
 
 const (
@@ -90,27 +87,6 @@ func (s *LibvirtKubeletService) Run() error {
 	if err != nil {
 		return err
 	}
-
-	capsXML, err := s.hypervisor.GetCapabilities()
-	if err != nil {
-		return err
-	}
-
-	caps := &libvirtxml.Caps{}
-	err = caps.Unmarshal(capsXML)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(caps)
-
-	nodeinfo, err := nodeinfo.NewNodeInfo(caps, s.hypervisor)
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(nodeinfo)
 
 	defer sock.Close()
 	return s.server.Serve(sock)
