@@ -19,7 +19,7 @@ $(BINARIES): .vendor.status $(SRC)
 
 .vendor.status: glide.yaml
 	if test -d vendor; then \
-		glide update --strip-vendor --quick; \
+		glide update --strip-vendor; \
 	else \
 		glide install --strip-vendor; \
 	fi && touch $@
