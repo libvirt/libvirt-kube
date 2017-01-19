@@ -20,44 +20,23 @@
 package nodeinfo
 
 import (
-	"encoding/json"
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
+	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
 )
 
-type NodeInfoGuest struct {
-	Hypervisor string
-	Arch       string
-	Type       string
+func NewNodeInfo(conn *libvirt.Connect) (*kubeapi.VirtNodeInfoSpec, error) {
+	capsxml, err := conn.GetCapabilities()
+	if err != nil {
+		return nil, err
+	}
 
-	Machines []string
-}
+	caps := libvirtxml.Caps{}
+	if err = caps.Unmarshal(capsxml); err != nil {
+		return nil, err
+	}
 
-type NodeInfoMemory struct {
-	PageSize int
-	Present  int
-	Used     int
-}
-
-type NodeInfoNUMACell struct {
-	CPUSAvail int
-	CPUSUsed  int
-	Memory    []NodeInfoMemory
-}
-
-type NodeInfoResources struct {
-	NUMACells []NodeInfoNUMACell
-}
-
-type NodeInfo struct {
-	UUID      string
-	Arch      string
-	Guests    []NodeInfoGuest
-	Resources NodeInfoResources
-}
-
-func NewNodeInfo(caps *libvirtxml.Caps, conn *libvirt.Connect) (*NodeInfo, error) {
-	guests := make([]NodeInfoGuest, 0)
+	guests := make([]kubeapi.VirtNodeInfoGuest, 0)
 
 	for _, cguest := range caps.Guests {
 		for _, cdom := range cguest.Arch.Domains {
@@ -71,7 +50,7 @@ func NewNodeInfo(caps *libvirtxml.Caps, conn *libvirt.Connect) (*NodeInfo, error
 			for _, cmach := range cmachines {
 				machines = append(machines, cmach.Name)
 			}
-			guests = append(guests, NodeInfoGuest{
+			guests = append(guests, kubeapi.VirtNodeInfoGuest{
 				Hypervisor: cdom.Type,
 				Arch:       cguest.Arch.Name,
 				Type:       cguest.OSType,
@@ -80,26 +59,28 @@ func NewNodeInfo(caps *libvirtxml.Caps, conn *libvirt.Connect) (*NodeInfo, error
 		}
 	}
 
-	cells := make([]NodeInfoNUMACell, 0)
+	cells := make([]kubeapi.VirtNodeInfoNUMACell, 0)
 	if caps.Host.NUMA != nil {
 		for _, lvcell := range caps.Host.NUMA.Cells {
 			ncpus := len(lvcell.CPUS)
-			memory := make([]NodeInfoMemory, 0)
+			memory := make([]kubeapi.VirtNodeInfoMemory, 0)
 			if lvcell.PageInfo == nil {
-				memory = append(memory, NodeInfoMemory{
+				memory = append(memory, kubeapi.VirtNodeInfoMemory{
 					PageSize: 4096,
 				})
 			} else {
 				for _, lvpage := range lvcell.PageInfo {
-					memory = append(memory, NodeInfoMemory{
+					memory = append(memory, kubeapi.VirtNodeInfoMemory{
 						PageSize: lvpage.Size,
 					})
 				}
 			}
-			cells = append(cells, NodeInfoNUMACell{
-				CPUSAvail: ncpus,
-				CPUSUsed:  0,
-				Memory:    memory,
+			cells = append(cells, kubeapi.VirtNodeInfoNUMACell{
+				CPU: kubeapi.VirtNodeInfoCPU{
+					Avail: ncpus,
+					Used:  0,
+				},
+				Memory: memory,
 			})
 		}
 	} else {
@@ -108,22 +89,24 @@ func NewNodeInfo(caps *libvirtxml.Caps, conn *libvirt.Connect) (*NodeInfo, error
 			return nil, err
 		}
 		ncpus := int(nodeinfo.Nodes * nodeinfo.Sockets * nodeinfo.Cores * nodeinfo.Threads)
-		memory := make([]NodeInfoMemory, 0)
-		memory = append(memory, NodeInfoMemory{
+		memory := make([]kubeapi.VirtNodeInfoMemory, 0)
+		memory = append(memory, kubeapi.VirtNodeInfoMemory{
 			PageSize: 4096,
 		})
-		cells = append(cells, NodeInfoNUMACell{
-			CPUSAvail: ncpus,
-			CPUSUsed:  0,
-			Memory:    memory,
+		cells = append(cells, kubeapi.VirtNodeInfoNUMACell{
+			CPU: kubeapi.VirtNodeInfoCPU{
+				Avail: ncpus,
+				Used:  0,
+			},
+			Memory: memory,
 		})
 	}
 
-	resources := NodeInfoResources{
+	resources := kubeapi.VirtNodeInfoResources{
 		NUMACells: cells,
 	}
 
-	info := &NodeInfo{
+	info := &kubeapi.VirtNodeInfoSpec{
 		UUID:      caps.Host.UUID,
 		Arch:      caps.Host.CPU.Arch,
 		Guests:    guests,
@@ -131,18 +114,4 @@ func NewNodeInfo(caps *libvirtxml.Caps, conn *libvirt.Connect) (*NodeInfo, error
 	}
 
 	return info, nil
-}
-
-func (n *NodeInfo) Serialize() (string, error) {
-
-	data, err := json.Marshal(n)
-
-	return string(data), err
-}
-
-func (n *NodeInfo) Deserialize(data string) error {
-
-	err := json.Unmarshal([]byte(data), n)
-
-	return err
 }
