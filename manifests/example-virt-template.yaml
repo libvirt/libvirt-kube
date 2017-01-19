@@ -27,18 +27,10 @@ cpu:
   model: Nehalem
 memory: 
   maximum: 1000
-  present: 500
+  initial: 500
   slots: 5
 topology: 
   cores: 2
-  max_cores: 2
-  max_nodes: 2
-  max_sockets: 2
-  max_threads: 1
-  min_cores: 2
-  min_nodes: 2
-  min_sockets: 2
-  min_threads: 1
   nodes: 2
   sockets: 2
   threads: 1

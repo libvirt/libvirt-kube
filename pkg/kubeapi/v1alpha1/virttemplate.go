@@ -98,23 +98,10 @@ type VirtTemplateMemory struct {
 }
 
 type VirtTemplateTopology struct {
-	// Prefered values
 	Nodes   int `json:"nodes,omitempty"`
 	Sockets int `json:"sockets,omitempty"`
 	Cores   int `json:"cores,omitempty"`
 	Threads int `json:"threads,omitempty"`
-
-	// Absolute minimum values
-	MinNodes   int `json:"min_nodes,omitempty"`
-	MinSockets int `json:"min_sockets,omitempty"`
-	MinCores   int `json:"min_cores,omitempty"`
-	MinThreads int `json:"min_threads,omitempty"`
-
-	// Absolute maximum values
-	MaxNodes   int `json:"max_nodes,omitempty"`
-	MaxSockets int `json:"max_sockets,omitempty"`
-	MaxCores   int `json:"max_cores,omitempty"`
-	MaxThreads int `json:"max_threads,omitempty"`
 }
 
 type VirtTemplateDeviceList struct {
