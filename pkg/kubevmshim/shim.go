@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"libvirt.org/libvirt-kube/pkg/designer"
 	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
+	"libvirt.org/libvirt-kube/pkg/resource"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,7 +68,6 @@ func NewShim(templateFile string, libvirtURI string) (*Shim, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(template)
 
 	shim := &Shim{
 		template:   template,
@@ -91,7 +91,13 @@ func (s *Shim) domainLifecycleEvent(c *libvirt.Connect, d *libvirt.Domain, ev *l
 }
 
 func (s *Shim) Run() error {
-	cfg, err := designer.DomainConfigFromVirtTemplate(s.template)
+	partition, err := resource.GetResourcePartition(os.Getpid())
+	if err != nil {
+		return err
+	}
+	glog.V(1).Infof("Using partition %s", partition)
+
+	cfg, err := designer.DomainConfigFromVirtTemplate(s.template, partition)
 	if err != nil {
 		return err
 	}

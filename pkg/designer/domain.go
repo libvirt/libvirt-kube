@@ -146,7 +146,7 @@ func setDomainDeviceConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domai
 	return nil
 }
 
-func DomainConfigFromVirtTemplate(tmpl *kubeapi.VirtTemplateSpec) (*libvirtxml.Domain, error) {
+func DomainConfigFromVirtTemplate(tmpl *kubeapi.VirtTemplateSpec, partition string) (*libvirtxml.Domain, error) {
 	uuid := uuid.NewV4().String()
 	name := fmt.Sprintf("kube-%s", uuid)
 
@@ -154,6 +154,12 @@ func DomainConfigFromVirtTemplate(tmpl *kubeapi.VirtTemplateSpec) (*libvirtxml.D
 		Type: tmpl.Type,
 		UUID: uuid,
 		Name: name,
+	}
+
+	if partition != "" {
+		dom.Resource = &libvirtxml.DomainResource{
+			Partition: partition,
+		}
 	}
 
 	if err := setDomainOSConfig(tmpl, dom); err != nil {
