@@ -105,7 +105,9 @@ type VirtTemplateTopology struct {
 }
 
 type VirtTemplateDeviceList struct {
-	Disks []*VirtTemplateDisk `json:"disk"`
+	Disks    []*VirtTemplateDisk    `json:"disk"`
+	Consoles []*VirtTemplateConsole `json:"console"`
+	Video    []*VirtTemplateVideo   `json:"video"`
 }
 
 type VirtTemplateDiskEncryptLUKS struct {
@@ -123,4 +125,15 @@ type VirtTemplateDisk struct {
 	Source    *VirtStorageVol              `json:"source"`
 	BootIndex int                          `json:"bootindex"`
 	Encrypt   *VirtTemplateDiskEncryptLUKS `json:"encrypt"`
+}
+
+type VirtTemplateConsole struct {
+	// 'serial', 'virtio'
+	Type string `json:"type"`
+}
+
+type VirtTemplateVideo struct {
+	// 'vga', 'cirrus', 'qxl', 'virtio', 'vmvga'
+	Type string `json:"type"`
+	VRam int    `json:"vram"`
 }
