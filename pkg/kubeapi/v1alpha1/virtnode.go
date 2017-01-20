@@ -56,9 +56,9 @@ type VirtnodeGuest struct {
 }
 
 type VirtnodeMemory struct {
-	PageSize int `json:"pagesize"`
-	Present  int `json:"present"`
-	Used     int `json:"used"`
+	PageSize int    `json:"pagesize"`
+	Present  uint64 `json:"present"`
+	Used     uint64 `json:"used"`
 }
 
 type VirtnodeCPU struct {
