@@ -30,7 +30,7 @@ import (
 
 type Service struct {
 	hypervisor *libvirt.Connect
-	nodeinfo   *kubeapi.VirtNodeInfo
+	nodeinfo   *kubeapi.Virtnode
 }
 
 func NewService(libvirtURI string) (*Service, error) {
@@ -48,12 +48,12 @@ func NewService(libvirtURI string) (*Service, error) {
 
 func (s *Service) updateNodeInfo() error {
 
-	nodeinfo, err := nodeinfo.NewNodeInfo(s.hypervisor)
+	node, err := nodeinfo.VirtNodeFromHypervisor(s.hypervisor)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(nodeinfo)
+	fmt.Println(node)
 
 	return nil
 }
