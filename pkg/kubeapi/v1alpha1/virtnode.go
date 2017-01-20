@@ -20,26 +20,26 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Virtnode defines info about a node able to run KVM guests
 type Virtnode struct {
-	metav1.TypeMeta `json:",inline"`
-	v1.ObjectMeta   `json:"metadata,omitempty"`
-	Spec            VirtnodeSpec `json:"spec"`
+	v1.TypeMeta `json:",inline"`
+	Metadata    v1.ObjectMeta `json:"metadata"`
+
+	Spec VirtnodeSpec `json:"spec"`
 }
 
 // VirtnodeList is a list of Virtnodes.
 type VirtnodeList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	v1.TypeMeta `json:",inline"`
+	Metadata    v1.ListMeta `json:"metadata"`
 
 	Items []*Virtnode `json:"items"`
 }
 
-// VirtNodeSpec holds specification parameters of a Virtnode deployment.
+// VirtnodeSpec holds specification parameters of a Virtnode deployment.
 type VirtnodeSpec struct {
 	UUID      string            `json:"uuid"`
 	Arch      string            `json:"arch"`

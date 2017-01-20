@@ -20,12 +20,14 @@
 package nodeinfo
 
 import (
+	"fmt"
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
 )
 
-func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.VirtnodeSpec, error) {
+func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 	capsxml, err := conn.GetCapabilities()
 	if err != nil {
 		return nil, err
@@ -109,11 +111,16 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.VirtnodeSpec, error
 		NUMACells: cells,
 	}
 
-	info := &kubeapi.VirtnodeSpec{
-		UUID:      caps.Host.UUID,
-		Arch:      caps.Host.CPU.Arch,
-		Guests:    guests,
-		Resources: resources,
+	info := &kubeapi.Virtnode{
+		Metadata: v1.ObjectMeta{
+			Name: fmt.Sprintf("virtnode-%s", caps.Host.UUID),
+		},
+		Spec: kubeapi.VirtnodeSpec{
+			UUID:      caps.Host.UUID,
+			Arch:      caps.Host.CPU.Arch,
+			Guests:    guests,
+			Resources: resources,
+		},
 	}
 
 	return info, nil
