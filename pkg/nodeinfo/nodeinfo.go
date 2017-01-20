@@ -67,11 +67,13 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.VirtnodeSpec, error
 			if lvcell.PageInfo == nil {
 				memory = append(memory, kubeapi.VirtnodeMemory{
 					PageSize: 4096,
+					Present:  lvcell.Memory.Size / 4,
 				})
 			} else {
 				for _, lvpage := range lvcell.PageInfo {
 					memory = append(memory, kubeapi.VirtnodeMemory{
 						PageSize: lvpage.Size,
+						Present:  lvpage.Count,
 					})
 				}
 			}
@@ -92,6 +94,7 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.VirtnodeSpec, error
 		memory := make([]kubeapi.VirtnodeMemory, 0)
 		memory = append(memory, kubeapi.VirtnodeMemory{
 			PageSize: 4096,
+			Present:  nodeinfo.Memory / 4,
 		})
 		cells = append(cells, kubeapi.VirtnodeNUMACell{
 			CPU: kubeapi.VirtnodeCPU{
