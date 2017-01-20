@@ -29,12 +29,13 @@ import (
 var (
 	connect = flag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
+	kubeconfig = flag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
 )
 
 func main() {
 	flag.Parse()
 
-	svc, err := kubenodeinfo.NewService(*connect)
+	svc, err := kubenodeinfo.NewService(*connect, *kubeconfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
