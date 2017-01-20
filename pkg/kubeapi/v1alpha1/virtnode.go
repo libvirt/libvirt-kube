@@ -21,6 +21,7 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // Virtnode defines info about a node able to run KVM guests
@@ -73,4 +74,24 @@ type VirtnodeNUMACell struct {
 
 type VirtnodeResources struct {
 	NUMACells []VirtnodeNUMACell `json:"cells"`
+}
+
+// Required to satisfy Object interface
+func (ni *Virtnode) GetObjectKind() schema.ObjectKind {
+	return &ni.TypeMeta
+}
+
+// Required to satisfy ObjectMetaAccessor interface
+func (ni *Virtnode) GetObjectMeta() v1.Object {
+	return &ni.Metadata
+}
+
+// Required to satisfy Object interface
+func (ni *VirtnodeList) GetObjectKind() schema.ObjectKind {
+	return &ni.TypeMeta
+}
+
+// Required to satisfy ListMetaAccessor interface
+func (ni *VirtnodeList) GetListMeta() v1.List {
+	return &ni.Metadata
 }
