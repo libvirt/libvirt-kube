@@ -24,39 +24,39 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
-// VirtTemplate defines a VirtTemplate deployment.
-type VirtTemplate struct {
+// Virttemplate defines a Virttemplate deployment.
+type Virttemplate struct {
 	metav1.TypeMeta `json:",inline"`
 	v1.ObjectMeta   `json:"metadata,omitempty"`
-	Spec            VirtTemplateSpec `json:"spec"`
-	//	Status          *VirtTemplateStatus `json:"status,omitempty"`
+	Spec            VirttemplateSpec `json:"spec"`
+	//	Status          *VirttemplateStatus `json:"status,omitempty"`
 }
 
-// VirtTemplateList is a list of VirtTemplates.
-type VirtTemplateList struct {
+// VirttemplateList is a list of Virttemplates.
+type VirttemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []*VirtTemplate `json:"items"`
+	Items []*Virttemplate `json:"items"`
 }
 
-// VirtTemplateSpec holds specification parameters of a VirtTemplate deployment.
-type VirtTemplateSpec struct {
+// VirttemplateSpec holds specification parameters of a Virttemplate deployment.
+type VirttemplateSpec struct {
 	// Hypervisor type (libvirt: /domain/@type)
 	Type    string             `json:"type"`
 	Arch    string             `json:"arch"`
 	Machine string             `json:"machine"`
-	Boot    VirtTemplateBoot   `json:"boot"`
-	Memory  VirtTemplateMemory `json:"memory"`
+	Boot    VirttemplateBoot   `json:"boot"`
+	Memory  VirttemplateMemory `json:"memory"`
 
-	CPU VirtTemplateCPU `json:"cpu"`
+	CPU VirttemplateCPU `json:"cpu"`
 
-	Topology VirtTemplateTopology `json:"topology"`
+	Topology VirttemplateTopology `json:"topology"`
 
-	Devices VirtTemplateDeviceList `json:"devices"`
+	Devices VirttemplateDeviceList `json:"devices"`
 }
 
-type VirtTemplateBoot struct {
+type VirttemplateBoot struct {
 	// 'direct' or 'firmware'
 	Type string `json:"type"`
 
@@ -65,28 +65,28 @@ type VirtTemplateBoot struct {
 	Ramdisk    *VirtStorageVol `json:"ramdisk,omitempty"`
 	KernelArgs string          `json:"kernel_args,omitempty"`
 
-	Firmware *VirtTemplateFirmware `json:"firmware"`
+	Firmware *VirttemplateFirmware `json:"firmware"`
 }
 
-type VirtTemplateFirmware struct {
+type VirttemplateFirmware struct {
 	// 'efi' or 'bios'
 	Type string `json:"type,omitempty"`
 }
 
-type VirtTemplateCPUFeature struct {
+type VirttemplateCPUFeature struct {
 	Name string `json:"name"`
 	// 'force', 'require', 'optional', 'disable', 'forbid'
 	Policy string `json:"policy"`
 }
 
-type VirtTemplateCPU struct {
+type VirttemplateCPU struct {
 	Count    int                      `json:"count"`
 	Mode     string                   `json:"string"`
 	Model    string                   `json:"string"`
-	Features []VirtTemplateCPUFeature `json:"features"`
+	Features []VirttemplateCPUFeature `json:"features"`
 }
 
-type VirtTemplateMemory struct {
+type VirttemplateMemory struct {
 	// Size of DIMMs currently plugged in MB
 	Initial int `json:"initial"`
 	// Maximum size to allow hotplug DIMMs in MB
@@ -97,42 +97,42 @@ type VirtTemplateMemory struct {
 	Slots int `json:"slots"`
 }
 
-type VirtTemplateTopology struct {
+type VirttemplateTopology struct {
 	Nodes   int `json:"nodes,omitempty"`
 	Sockets int `json:"sockets,omitempty"`
 	Cores   int `json:"cores,omitempty"`
 	Threads int `json:"threads,omitempty"`
 }
 
-type VirtTemplateDeviceList struct {
-	Disks    []*VirtTemplateDisk    `json:"disk"`
-	Consoles []*VirtTemplateConsole `json:"console"`
-	Video    []*VirtTemplateVideo   `json:"video"`
+type VirttemplateDeviceList struct {
+	Disks    []*VirttemplateDisk    `json:"disk"`
+	Consoles []*VirttemplateConsole `json:"console"`
+	Video    []*VirttemplateVideo   `json:"video"`
 }
 
-type VirtTemplateDiskEncryptLUKS struct {
+type VirttemplateDiskEncryptLUKS struct {
 	// Name of kubernetes secret
 	Passphrase string `json:"passphrase"`
 }
 
-type VirtTemplateDiskEncrypt struct {
-	LUKS *VirtTemplateDiskEncryptLUKS `json:"luks"`
+type VirttemplateDiskEncrypt struct {
+	LUKS *VirttemplateDiskEncryptLUKS `json:"luks"`
 }
 
-type VirtTemplateDisk struct {
+type VirttemplateDisk struct {
 	// 'disk', 'cdrom', etc
 	Device    string                       `json:"type"`
 	Source    *VirtStorageVol              `json:"source"`
 	BootIndex int                          `json:"bootindex"`
-	Encrypt   *VirtTemplateDiskEncryptLUKS `json:"encrypt"`
+	Encrypt   *VirttemplateDiskEncryptLUKS `json:"encrypt"`
 }
 
-type VirtTemplateConsole struct {
+type VirttemplateConsole struct {
 	// 'serial', 'virtio'
 	Type string `json:"type"`
 }
 
-type VirtTemplateVideo struct {
+type VirttemplateVideo struct {
 	// 'vga', 'cirrus', 'qxl', 'virtio', 'vmvga'
 	Type string `json:"type"`
 	VRam int    `json:"vram"`

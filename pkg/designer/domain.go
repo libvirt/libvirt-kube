@@ -16,7 +16,7 @@ func getVolumeLocalPath(vol *kubeapi.VirtStorageVol) (string, error) {
 	return vol.Pool.Dir.Path + "/" + vol.Name, nil
 }
 
-func setDomainOSConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainOSConfig(tmpl *kubeapi.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	dom.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{
 			Arch: tmpl.Arch,
@@ -82,7 +82,7 @@ func setDomainOSConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domain) e
 	return nil
 }
 
-func setDomainMemoryConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainMemoryConfig(tmpl *kubeapi.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	if (tmpl.Memory.Initial%tmpl.Memory.Slots) != 0 ||
 		(tmpl.Memory.Maximum%tmpl.Memory.Slots) != 0 {
 		return fmt.Errorf("Memory present %d and maximum %d must be multiple of slots %d",
@@ -110,12 +110,12 @@ func setDomainMemoryConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domai
 	return nil
 }
 
-func setDomainCPUConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainCPUConfig(tmpl *kubeapi.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	// TODO
 	return nil
 }
 
-func setDomainDiskConfig(tmpl *kubeapi.VirtTemplateSpec, disk *kubeapi.VirtTemplateDisk, devs *libvirtxml.DomainDeviceList) error {
+func setDomainDiskConfig(tmpl *kubeapi.VirttemplateSpec, disk *kubeapi.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
 	path, err := getVolumeLocalPath(disk.Source)
 	if err != nil {
 		return err
@@ -134,7 +134,7 @@ func setDomainDiskConfig(tmpl *kubeapi.VirtTemplateSpec, disk *kubeapi.VirtTempl
 	return nil
 }
 
-func setDomainDeviceConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainDeviceConfig(tmpl *kubeapi.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	dom.Devices = &libvirtxml.DomainDeviceList{}
 
 	for _, disk := range tmpl.Devices.Disks {
@@ -146,7 +146,7 @@ func setDomainDeviceConfig(tmpl *kubeapi.VirtTemplateSpec, dom *libvirtxml.Domai
 	return nil
 }
 
-func DomainConfigFromVirtTemplate(tmpl *kubeapi.VirtTemplateSpec, partition string) (*libvirtxml.Domain, error) {
+func DomainConfigFromVirtTemplate(tmpl *kubeapi.VirttemplateSpec, partition string) (*libvirtxml.Domain, error) {
 	uuid := uuid.NewV4().String()
 	name := fmt.Sprintf("kube-%s", uuid)
 

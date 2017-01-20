@@ -34,7 +34,7 @@ import (
 )
 
 type Shim struct {
-	template   *kubeapi.VirtTemplateSpec
+	template   *kubeapi.VirttemplateSpec
 	hypervisor *libvirt.Connect
 	domain     *libvirt.Domain
 	shutdown   chan bool
@@ -63,7 +63,7 @@ func NewShim(templateFile string, libvirtURI string) (*Shim, error) {
 		return nil, err
 	}
 
-	template := &kubeapi.VirtTemplateSpec{}
+	template := &kubeapi.VirttemplateSpec{}
 	err = yaml.Unmarshal(templateYAML, &template)
 	if err != nil {
 		return nil, err
