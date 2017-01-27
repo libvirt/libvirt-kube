@@ -110,21 +110,16 @@ type VirttemplateDeviceList struct {
 	Video    []*VirttemplateVideo   `json:"video"`
 }
 
-type VirttemplateDiskEncryptLUKS struct {
-	// Name of kubernetes secret
-	Passphrase string `json:"passphrase"`
-}
-
 type VirttemplateDiskEncrypt struct {
-	LUKS *VirttemplateDiskEncryptLUKS `json:"luks"`
+	Passphrase string `json:"passphrase"`
 }
 
 type VirttemplateDisk struct {
 	// 'disk', 'cdrom', etc
-	Device    string                       `json:"type"`
-	Source    *VirtStorageVol              `json:"source"`
-	BootIndex int                          `json:"bootindex"`
-	Encrypt   *VirttemplateDiskEncryptLUKS `json:"encrypt"`
+	Device    string                   `json:"type"`
+	Source    *VirtStorageVol          `json:"source"`
+	BootIndex int                      `json:"bootindex"`
+	Encrypt   *VirttemplateDiskEncrypt `json:"encrypt"`
 }
 
 type VirttemplateConsole struct {
