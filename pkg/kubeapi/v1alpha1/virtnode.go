@@ -29,7 +29,8 @@ type Virtnode struct {
 	v1.TypeMeta `json:",inline"`
 	Metadata    v1.ObjectMeta `json:"metadata"`
 
-	Spec VirtnodeSpec `json:"spec"`
+	Status VirtnodeStatus `json:"status"`
+	Spec   VirtnodeSpec   `json:"spec"`
 }
 
 // VirtnodeList is a list of Virtnodes.
@@ -39,6 +40,18 @@ type VirtnodeList struct {
 
 	Items []*Virtnode `json:"items"`
 }
+
+type VirtnodeStatus struct {
+	Phase VirtnodePhase `json:"phase"`
+}
+
+type VirtnodePhase string
+
+const (
+	VirtnodeReady   = "Ready"
+	VirtnodeFailed  = "Failed"
+	VirtnodeOffline = "Offline"
+)
 
 // VirtnodeSpec holds specification parameters of a Virtnode deployment.
 type VirtnodeSpec struct {

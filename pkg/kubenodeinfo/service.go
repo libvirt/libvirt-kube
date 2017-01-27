@@ -20,7 +20,6 @@
 package kubenodeinfo
 
 import (
-	"fmt"
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,11 +33,35 @@ import (
 	"time"
 )
 
+// Retry every 5 seconds for 30 seconds, then every 15 seconds
+// for another minute, then every 60 seconds thereafter
+var reconnectDelay = []int{
+	5, 5, 5, 5, 5, 5, 15, 15, 15, 15, 60,
+}
+
+type Hypervisor struct {
+	uri            string
+	closed         chan libvirt.ConnectCloseReason
+	conn           *libvirt.Connect
+	reconnectDelay int
+}
+
 type Service struct {
-	hypervisor *libvirt.Connect
+	hypervisor Hypervisor
 	clientset  *kubernetes.Clientset
 	nodeinfo   *kubeapiv1.Virtnode
 	tprclient  *rest.RESTClient
+}
+
+func eventloop() {
+	for {
+		libvirt.EventRunDefaultImpl()
+	}
+}
+
+func init() {
+	libvirt.EventRegisterDefaultImpl()
+	go eventloop()
 }
 
 func getKubeConfig(kubeconfig string) (*rest.Config, error) {
@@ -49,26 +72,18 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 }
 
 func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
-	hypervisor, err := libvirt.NewConnect(libvirtURI)
-	if err != nil {
-		return nil, err
-	}
-
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
-		hypervisor.Close()
 		return nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
-		hypervisor.Close()
 		return nil, err
 	}
 
 	err = kubeapi.RegisterResourceExtension(clientset, "virtnode.libvirt.org", "libvirt.org", "virtnodes", "v1alpha1", "Virt nodes")
 	if err != nil {
-		hypervisor.Close()
 		return nil, err
 	}
 
@@ -76,37 +91,55 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 
 	tprclient, err := kubeapi.GetResourceClient(kubeconfig, "libvirt.org", "v1alpha1")
 	if err != nil {
-		hypervisor.Close()
 		return nil, err
 	}
 
 	shim := &Service{
-		hypervisor: hypervisor,
-		clientset:  clientset,
-		tprclient:  tprclient,
+		hypervisor: Hypervisor{
+			closed: make(chan libvirt.ConnectCloseReason, 1),
+			uri:    libvirtURI,
+		},
+		clientset: clientset,
+		tprclient: tprclient,
 	}
 
 	return shim, nil
 }
 
-func (s *Service) updateNode() error {
-
-	nodeinfo, err := nodeinfo.VirtNodeFromHypervisor(s.hypervisor)
-	if err != nil {
-		return err
+func (s *Service) updateNode(phase kubeapiv1.VirtnodePhase) error {
+	if phase == kubeapiv1.VirtnodeReady {
+		nodeinfo, err := nodeinfo.VirtNodeFromHypervisor(s.hypervisor.conn)
+		if err != nil {
+			if s.nodeinfo != nil {
+				s.nodeinfo.Status.Phase = kubeapiv1.VirtnodeFailed
+			} else {
+				glog.V(1).Info("No previous nodeinfo, returning")
+				return nil
+			}
+		} else {
+			s.nodeinfo = nodeinfo
+		}
+	} else {
+		if s.nodeinfo != nil {
+			s.nodeinfo.Status.Phase = phase
+		} else {
+			glog.V(1).Info("No previous nodeinfo, returning")
+			return nil
+		}
 	}
-	fmt.Println(nodeinfo)
 
-	res := s.tprclient.Get().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(nodeinfo.Metadata.Name).Do()
-	err = res.Error()
+	res := s.tprclient.Get().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Do()
+	err := res.Error()
 
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
-		res = s.tprclient.Post().Resource("virtnodes").Namespace(api.NamespaceDefault).Body(nodeinfo).Do()
+		glog.V(1).Info("Creating initial record")
+		res = s.tprclient.Post().Resource("virtnodes").Namespace(api.NamespaceDefault).Body(s.nodeinfo).Do()
 	} else {
-		res = s.tprclient.Put().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(nodeinfo.Metadata.Name).Body(nodeinfo).Do()
+		glog.V(1).Info("Updating existing record")
+		res = s.tprclient.Put().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Body(s.nodeinfo).Do()
 	}
 
 	err = res.Error()
@@ -121,11 +154,64 @@ func (s *Service) updateNode() error {
 	return nil
 }
 
+func (s *Service) libvirtClosed(conn *libvirt.Connect, reason libvirt.ConnectCloseReason) {
+	glog.V(1).Infof("Notify about connection close %d", reason)
+	s.hypervisor.closed <- reason
+}
+
+func (s *Service) connect() error {
+	glog.V(1).Infof("Trying to connect to %s", s.hypervisor.uri)
+	conn, err := libvirt.NewConnect(s.hypervisor.uri)
+	if err != nil {
+		return err
+	}
+
+	s.hypervisor.conn = conn
+	s.hypervisor.closed = make(chan libvirt.ConnectCloseReason, 1)
+
+	conn.RegisterCloseCallback(s.libvirtClosed)
+
+	return nil
+}
+
+func (s *Service) disconnect() {
+	glog.V(1).Info("Disconnecting from closed libvirt connection")
+	s.hypervisor.conn.UnregisterCloseCallback()
+	s.hypervisor.conn.Close()
+	s.hypervisor.conn = nil
+	s.hypervisor.reconnectDelay = 0
+}
+
 func (s *Service) Run() error {
+	glog.V(1).Info("Running node service")
 	for {
-		glog.V(1).Info("Updating node info")
-		s.updateNode()
-		time.Sleep(15 * time.Second)
+		select {
+		case reason := <-s.hypervisor.closed:
+			glog.V(1).Infof("Saw hypervisor disconnect reason %d", reason)
+			s.disconnect()
+			s.updateNode(kubeapiv1.VirtnodeOffline)
+		default:
+			// Cause select to be non-blocking if not hv is not closed
+		}
+
+		if s.hypervisor.conn == nil {
+			err := s.connect()
+			if err != nil {
+				glog.V(1).Infof("Unable to connect to %s, retry in %d seconds: %s",
+					s.hypervisor.uri, reconnectDelay[s.hypervisor.reconnectDelay], err)
+				time.Sleep(time.Duration(reconnectDelay[s.hypervisor.reconnectDelay]) * time.Second)
+				if s.hypervisor.reconnectDelay < (len(reconnectDelay) - 1) {
+					s.hypervisor.reconnectDelay++
+				}
+				s.hypervisor.reconnectDelay = 0
+			}
+		}
+
+		if s.hypervisor.conn != nil {
+			glog.V(1).Info("Updating node info")
+			s.updateNode(kubeapiv1.VirtnodeReady)
+			time.Sleep(15 * time.Second)
+		}
 	}
 
 	return nil

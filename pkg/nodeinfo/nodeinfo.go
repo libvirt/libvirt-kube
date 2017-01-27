@@ -115,6 +115,9 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 		Metadata: v1.ObjectMeta{
 			Name: fmt.Sprintf("virtnode-%s", caps.Host.UUID),
 		},
+		Status: kubeapi.VirtnodeStatus{
+			Phase: kubeapi.VirtnodeReady,
+		},
 		Spec: kubeapi.VirtnodeSpec{
 			UUID:      caps.Host.UUID,
 			Arch:      caps.Host.CPU.Arch,
