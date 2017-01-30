@@ -22,18 +22,24 @@ package main
 import (
 	"flag"
 	"fmt"
-	"libvirt.org/libvirt-kube/pkg/kubenodeinfo"
 	"os"
+
+	"github.com/spf13/pflag"
+
+	"libvirt.org/libvirt-kube/pkg/kubenodeinfo"
 )
 
 var (
-	connect = flag.String("connect", "qemu:///system",
+	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
-	kubeconfig = flag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
+	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
 )
 
 func main() {
-	flag.Parse()
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	// Convince glog that we really have parsed CLI
+	flag.CommandLine.Parse([]string{})
 
 	svc, err := kubenodeinfo.NewService(*connect, *kubeconfig)
 	if err != nil {

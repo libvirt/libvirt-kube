@@ -22,19 +22,25 @@ package main
 import (
 	"flag"
 	"fmt"
-	"libvirt.org/libvirt-kube/pkg/kubecri"
 	"os"
+
+	"github.com/spf13/pflag"
+
+	"libvirt.org/libvirt-kube/pkg/kubecri"
 )
 
 var (
-	listen = flag.String("listen", "/run/libvirt/virtkubecri.sock",
+	listen = pflag.String("listen", "/run/libvirt/virtkubecri.sock",
 		"UNIX socket path to listen on")
-	connect = flag.String("connect", "qemu:///system",
+	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
 )
 
 func main() {
-	flag.Parse()
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	// Convince glog that we really have parsed CLI
+	flag.CommandLine.Parse([]string{})
 
 	svc, err := kubecri.NewService(*listen, *connect)
 	if err != nil {

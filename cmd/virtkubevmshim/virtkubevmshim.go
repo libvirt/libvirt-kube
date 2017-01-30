@@ -22,19 +22,25 @@ package main
 import (
 	"flag"
 	"fmt"
-	"libvirt.org/libvirt-kube/pkg/kubevmshim"
 	"os"
+
+	"github.com/spf13/pflag"
+
+	"libvirt.org/libvirt-kube/pkg/kubevmshim"
 )
 
 var (
-	config = flag.String("config", "/data/vm.json",
+	config = pflag.String("config", "/data/vm.json",
 		"VM template spec")
-	connect = flag.String("connect", "qemu:///system",
+	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
 )
 
 func main() {
-	flag.Parse()
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	// Convince glog that we really have parsed CLI
+	flag.CommandLine.Parse([]string{})
 
 	svc, err := kubevmshim.NewShim(*config, *connect)
 	if err != nil {
