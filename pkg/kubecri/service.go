@@ -103,10 +103,10 @@ func (s *LibvirtKubeletService) Version(ctx context.Context, req *runtime.Versio
 	localRuntimeName := runtimeName
 	localRuntimeVersion := runtimeVersion
 	return &runtime.VersionResponse{
-		Version:           &localVersion,
-		RuntimeName:       &localRuntimeName,
-		RuntimeVersion:    &localRuntimeVersion,
-		RuntimeApiVersion: &apiVersion,
+		Version:           localVersion,
+		RuntimeName:       localRuntimeName,
+		RuntimeVersion:    localRuntimeVersion,
+		RuntimeApiVersion: apiVersion,
 	}, nil
 }
 
@@ -218,12 +218,12 @@ func (s *LibvirtKubeletService) Status(ctx context.Context, req *runtime.StatusR
 	status := runtime.RuntimeStatus{
 		Conditions: []*runtime.RuntimeCondition{
 			{
-				Type:   &runtimeReadyStr,
-				Status: &ready,
+				Type:   runtimeReadyStr,
+				Status: ready,
 			},
 			{
-				Type:   &networkReadyStr,
-				Status: &ready,
+				Type:   networkReadyStr,
+				Status: ready,
 			},
 		},
 	}
@@ -236,7 +236,7 @@ func (s *LibvirtKubeletService) Status(ctx context.Context, req *runtime.StatusR
 func (s *LibvirtKubeletService) ListImages(ctx context.Context, req *runtime.ListImagesRequest) (*runtime.ListImagesResponse, error) {
 	hostImageName := "host"
 	hostImage := &runtime.Image{
-		Id: &hostImageName,
+		Id: hostImageName,
 	}
 
 	images := []*runtime.Image{
@@ -249,13 +249,13 @@ func (s *LibvirtKubeletService) ListImages(ctx context.Context, req *runtime.Lis
 // present, returns nil.
 func (s *LibvirtKubeletService) ImageStatus(ctx context.Context, req *runtime.ImageStatusRequest) (*runtime.ImageStatusResponse, error) {
 	imageSpec := req.Image
-	if *imageSpec.Image != "host" {
+	if imageSpec.Image != "host" {
 		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
 	}
 
 	hostImageName := "host"
 	hostImage := &runtime.Image{
-		Id: &hostImageName,
+		Id: hostImageName,
 	}
 
 	return &runtime.ImageStatusResponse{Image: hostImage}, nil
@@ -264,7 +264,7 @@ func (s *LibvirtKubeletService) ImageStatus(ctx context.Context, req *runtime.Im
 // PullImage pulls an image with authentication config.
 func (s *LibvirtKubeletService) PullImage(ctx context.Context, req *runtime.PullImageRequest) (*runtime.PullImageResponse, error) {
 	imageSpec := req.Image
-	if *imageSpec.Image != "host" {
+	if imageSpec.Image != "host" {
 		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
 	}
 
@@ -276,7 +276,7 @@ func (s *LibvirtKubeletService) PullImage(ctx context.Context, req *runtime.Pull
 // already been removed.
 func (s *LibvirtKubeletService) RemoveImage(ctx context.Context, req *runtime.RemoveImageRequest) (*runtime.RemoveImageResponse, error) {
 	imageSpec := req.Image
-	if *imageSpec.Image != "host" {
+	if imageSpec.Image != "host" {
 		return nil, fmt.Errorf("Unknown image %s", imageSpec.Image)
 	}
 
