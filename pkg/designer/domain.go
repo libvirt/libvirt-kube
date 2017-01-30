@@ -1,22 +1,24 @@
 package designer
 
 import (
-	"errors"
 	"fmt"
+	"net"
+
 	"github.com/libvirt/libvirt-go-xml"
 	"github.com/twinj/uuid"
+	"k8s.io/client-go/kubernetes"
+	kubeapi "k8s.io/client-go/pkg/api"
+	kubeapiv1 "k8s.io/client-go/pkg/api/v1"
+
+	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 )
 
-func getVolumeLocalPath(vol *apiv1.VirtStorageVol) (string, error) {
-	if vol.Pool.Dir == nil {
-		return "", errors.New("A local directory volume is required")
-	}
-
-	return vol.Pool.Dir.Path + "/" + vol.Name, nil
+func getVolumeLocalPath(clientset *kubernetes.Clientset, etype string, src *apiv1.VirttemplateStorage) (string, error) {
+	return "", fmt.Errorf("Cannot setup volume")
 }
 
-func setDomainOSConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainOSConfig(clientset *kubernetes.Clientset, tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	dom.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{
 			Arch: tmpl.Arch,
@@ -29,12 +31,12 @@ func setDomainOSConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) err
 	}
 
 	switch tmpl.Boot.Type {
-	case "firmware":
-		kpath, err := getVolumeLocalPath(tmpl.Boot.Kernel)
+	case "direct":
+		kpath, err := getVolumeLocalPath(clientset, "kernel", tmpl.Boot.Kernel)
 		if err != nil {
 			return err
 		}
-		ipath, err := getVolumeLocalPath(tmpl.Boot.Ramdisk)
+		ipath, err := getVolumeLocalPath(clientset, "ramdisk", tmpl.Boot.Ramdisk)
 		if err != nil {
 			return err
 		}
@@ -43,7 +45,7 @@ func setDomainOSConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) err
 		dom.OS.Initrd = ipath
 		dom.OS.KernelArgs = tmpl.Boot.KernelArgs
 
-	case "direct":
+	case "firmware":
 		// We set boot index on devices later for this
 
 	default:
@@ -115,18 +117,79 @@ func setDomainCPUConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) er
 	return nil
 }
 
-func setDomainDiskConfig(tmpl *apiv1.VirttemplateSpec, disk *apiv1.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
-	path, err := getVolumeLocalPath(disk.Source)
+func setDomainDiskConfigRBD(src *kubeapiv1.RBDVolumeSource, disk *libvirtxml.DomainDisk) error {
+	disk.Type = "network"
+
+	disk.Source = &libvirtxml.DomainDiskSource{
+		Protocol: "rbd",
+		Name:     src.RBDPool + "/" + src.RBDImage,
+	}
+
+	for _, mon := range src.CephMonitors {
+		host, port, err := net.SplitHostPort(mon)
+		if err != nil {
+			return err
+		}
+		disk.Source.Hosts = append(disk.Source.Hosts,
+			libvirtxml.DomainDiskSourceHost{
+				Transport: "tcp",
+				Name:      host,
+				Port:      port,
+			})
+	}
+	disk.Target = &libvirtxml.DomainDiskTarget{
+		Dev: "vda",
+		Bus: "virtio",
+	}
+
+	return nil
+}
+
+func setDomainDiskConfigISCSI(src *kubeapiv1.ISCSIVolumeSource, disk *libvirtxml.DomainDisk) error {
+	disk.Type = "network"
+
+	disk.Source = &libvirtxml.DomainDiskSource{
+		Protocol: "rbd",
+		Name:     fmt.Sprintf("%s/%d", src.IQN, src.Lun),
+	}
+
+	host, port, err := net.SplitHostPort(src.TargetPortal)
+	if err != nil {
+		return err
+	}
+	disk.Source.Hosts = append(disk.Source.Hosts,
+		libvirtxml.DomainDiskSourceHost{
+			Transport: "tcp",
+			Name:      host,
+			Port:      port,
+		})
+
+	disk.Target = &libvirtxml.DomainDiskTarget{
+		Dev: "vda",
+		Bus: "virtio",
+	}
+
+	return nil
+}
+
+func setDomainDiskConfig(clientset *kubernetes.Clientset, tmpl *apiv1.VirttemplateSpec, disk *apiv1.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
+	pvname, pvspec, err := api.GetVolumeSpec(clientset, disk.Source.PersistentVolume.ClaimName, kubeapi.NamespaceDefault)
 	if err != nil {
 		return err
 	}
 
 	diskConfig := libvirtxml.DomainDisk{
-		Type:   "file",
 		Device: disk.Device,
-		FileSource: &libvirtxml.DomainDiskFileSource{
-			File: path,
-		},
+	}
+
+	src := pvspec.PersistentVolumeSource
+
+	if src.RBD != nil {
+		err = setDomainDiskConfigRBD(src.RBD, &diskConfig)
+	} else if src.ISCSI != nil {
+		err = setDomainDiskConfigISCSI(src.ISCSI, &diskConfig)
+	} else {
+		return fmt.Errorf("Unsupported persistent volume source on %s", pvname)
 	}
 
 	devs.Disks = append(devs.Disks, diskConfig)
@@ -134,11 +197,11 @@ func setDomainDiskConfig(tmpl *apiv1.VirttemplateSpec, disk *apiv1.VirttemplateD
 	return nil
 }
 
-func setDomainDeviceConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) error {
+func setDomainDeviceConfig(clientset *kubernetes.Clientset, tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain) error {
 	dom.Devices = &libvirtxml.DomainDeviceList{}
 
 	for _, disk := range tmpl.Devices.Disks {
-		if err := setDomainDiskConfig(tmpl, disk, dom.Devices); err != nil {
+		if err := setDomainDiskConfig(clientset, tmpl, disk, dom.Devices); err != nil {
 			return err
 		}
 	}
@@ -146,7 +209,7 @@ func setDomainDeviceConfig(tmpl *apiv1.VirttemplateSpec, dom *libvirtxml.Domain)
 	return nil
 }
 
-func DomainConfigFromVirtTemplate(tmpl *apiv1.VirttemplateSpec, partition string) (*libvirtxml.Domain, error) {
+func DomainConfigFromVirtTemplate(clientset *kubernetes.Clientset, tmpl *apiv1.VirttemplateSpec, partition string) (*libvirtxml.Domain, error) {
 	uuid := uuid.NewV4().String()
 	name := fmt.Sprintf("kube-%s", uuid)
 
@@ -162,7 +225,7 @@ func DomainConfigFromVirtTemplate(tmpl *apiv1.VirttemplateSpec, partition string
 		}
 	}
 
-	if err := setDomainOSConfig(tmpl, dom); err != nil {
+	if err := setDomainOSConfig(clientset, tmpl, dom); err != nil {
 		return nil, err
 	}
 
@@ -171,6 +234,10 @@ func DomainConfigFromVirtTemplate(tmpl *apiv1.VirttemplateSpec, partition string
 	}
 
 	if err := setDomainCPUConfig(tmpl, dom); err != nil {
+		return nil, err
+	}
+
+	if err := setDomainDeviceConfig(clientset, tmpl, dom); err != nil {
 		return nil, err
 	}
 

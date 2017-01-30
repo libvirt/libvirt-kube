@@ -121,7 +121,7 @@ func (s *Shim) Run() error {
 	}
 	glog.V(1).Infof("Using partition %s", partition)
 
-	cfg, err := designer.DomainConfigFromVirtTemplate(s.template, partition)
+	cfg, err := designer.DomainConfigFromVirtTemplate(s.clientset, s.template, partition)
 	if err != nil {
 		return err
 	}

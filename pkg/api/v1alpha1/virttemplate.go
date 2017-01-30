@@ -56,14 +56,25 @@ type VirttemplateSpec struct {
 	Devices VirttemplateDeviceList `json:"devices"`
 }
 
+type VirttemplateStorage struct {
+	PersistentVolume *VirttemplateStoragePersistentVolume `json:"persistentVolume"`
+}
+
+// The guest will be directly connected to the raw persistent storage
+// volume listed, assuming QEMU has a network client for the storage
+// protocol refered to.
+type VirttemplateStoragePersistentVolume struct {
+	ClaimName string `json:"claimName"`
+}
+
 type VirttemplateBoot struct {
 	// 'direct' or 'firmware'
 	Type string `json:"type"`
 
 	// Only if Type == 'direct'
-	Kernel     *VirtStorageVol `json:"kernel,omitempty"`
-	Ramdisk    *VirtStorageVol `json:"ramdisk,omitempty"`
-	KernelArgs string          `json:"kernel_args,omitempty"`
+	Kernel     *VirttemplateStorage `json:"kernel,omitempty"`
+	Ramdisk    *VirttemplateStorage `json:"ramdisk,omitempty"`
+	KernelArgs string               `json:"kernel_args,omitempty"`
 
 	Firmware *VirttemplateFirmware `json:"firmware"`
 }
@@ -114,10 +125,15 @@ type VirttemplateDiskEncrypt struct {
 	Passphrase string `json:"passphrase"`
 }
 
+type VirttemplateDiskSource struct {
+	Name        string `json:"name"`
+	BackingName string `json:"name"`
+}
+
 type VirttemplateDisk struct {
 	// 'disk', 'cdrom', etc
-	Device    string                   `json:"type"`
-	Source    *VirtStorageVol          `json:"source"`
+	Device    string                   `json:"device"`
+	Source    *VirttemplateStorage     `json:"source"`
 	BootIndex int                      `json:"bootindex"`
 	Encrypt   *VirttemplateDiskEncrypt `json:"encrypt"`
 }

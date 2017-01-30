@@ -3,18 +3,7 @@ type: kvm
 arch: x86_64
 machine: pc
 boot: 
-  kernel:
-    name: vmlinuz
-    pool:
-      dir:
-        path: /home/berrange
-  kernel_args: console=ttyS0
-  ramdisk:
-    name: initrd
-    pool:
-      dir:
-        path: /home/berrange
-  type: direct
+  type: firmware
   firmware: 
     type: bios
 cpu: 
@@ -43,7 +32,5 @@ devices:
         luks: 
           passphrase: 123456
       source:
-        name: disk1.img
-        pool:
-          dir:
-            path: /home/berrange
+        persistentVolume:
+          claimName: pvc-rbd1
