@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"libvirt.org/libvirt-kube/pkg/kubecri"
+	"libvirt.org/libvirt-kube/pkg/cri"
 )
 
 var (
@@ -42,7 +42,7 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := kubecri.NewService(*listen, *connect)
+	svc, err := cri.NewService(*listen, *connect)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

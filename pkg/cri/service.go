@@ -17,7 +17,7 @@
  *
  */
 
-package kubecri
+package cri
 
 import (
 	"errors"
