@@ -12,11 +12,14 @@ import:
   - context
 - package: google.golang.org/grpc
 - package: k8s.io/apimachinery
+  version: 02fccf9462f0fb0287e82cb8a0f1d03b05f8d704
   subpackages:
   - pkg/apis/meta/v1
 - package: k8s.io/client-go
+  version: fb6075f2e0b094320f3d2c3e99add90a4661fcff
   subpackages:
   - pkg/api/v1
 - package: k8s.io/kubernetes
+  version: 5d8e607ef20f66d2ea1f476d6d66af9cce4ab445
   subpackages:
   - pkg/kubelet/api/v1alpha1/runtime
