@@ -17,7 +17,7 @@
  *
  */
 
-package kubevmshim
+package vmshim
 
 import (
 	"fmt"
