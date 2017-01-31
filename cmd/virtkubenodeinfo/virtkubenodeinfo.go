@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"libvirt.org/libvirt-kube/pkg/kubenodeinfo"
+	"libvirt.org/libvirt-kube/pkg/nodeinfo"
 )
 
 var (
@@ -41,7 +41,7 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := kubenodeinfo.NewService(*connect, *kubeconfig)
+	svc, err := nodeinfo.NewService(*connect, *kubeconfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

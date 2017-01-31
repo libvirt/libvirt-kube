@@ -17,7 +17,7 @@
  *
  */
 
-package kubenodeinfo
+package nodeinfo
 
 import (
 	"time"
@@ -32,7 +32,6 @@ import (
 
 	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
-	"libvirt.org/libvirt-kube/pkg/nodeinfo"
 )
 
 // Retry every 5 seconds for 30 seconds, then every 15 seconds
@@ -110,7 +109,7 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 
 func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
 	if phase == apiv1.VirtnodeReady {
-		nodeinfo, err := nodeinfo.VirtNodeFromHypervisor(s.hypervisor.conn)
+		nodeinfo, err := VirtNodeFromHypervisor(s.hypervisor.conn)
 		if err != nil {
 			if s.nodeinfo != nil {
 				s.nodeinfo.Status.Phase = apiv1.VirtnodeFailed
