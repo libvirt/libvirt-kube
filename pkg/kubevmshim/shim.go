@@ -21,19 +21,23 @@ package kubevmshim
 
 import (
 	"fmt"
-	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
-	"github.com/libvirt/libvirt-go"
 	"io/ioutil"
-	"libvirt.org/libvirt-kube/pkg/designer"
-	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
-	"libvirt.org/libvirt-kube/pkg/resource"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/ghodss/yaml"
+	"github.com/golang/glog"
+	"github.com/libvirt/libvirt-go"
+	"k8s.io/client-go/kubernetes"
+
+	"libvirt.org/libvirt-kube/pkg/designer"
+	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
+	"libvirt.org/libvirt-kube/pkg/resource"
 )
 
 type Shim struct {
+	clientset  *kubernetes.Clientset
 	template   *kubeapi.VirttemplateSpec
 	hypervisor *libvirt.Connect
 	domain     *libvirt.Domain
@@ -52,7 +56,17 @@ func init() {
 	go runEventLoop()
 }
 
-func NewShim(templateFile string, libvirtURI string) (*Shim, error) {
+func NewShim(templateFile string, libvirtURI string, kubeconfig string) (*Shim, error) {
+	kubeconfig, err := getKubeConfig(kubeconfigfile)
+	if err != nil {
+		return nil, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
 	hypervisor, err := libvirt.NewConnect(libvirtURI)
 	if err != nil {
 		return nil, err
@@ -70,6 +84,7 @@ func NewShim(templateFile string, libvirtURI string) (*Shim, error) {
 	}
 
 	shim := &Shim{
+		clientset:  clientset,
 		template:   template,
 		hypervisor: hypervisor,
 		shutdown:   make(chan bool, 1),

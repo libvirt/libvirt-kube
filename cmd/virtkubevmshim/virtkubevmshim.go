@@ -34,6 +34,7 @@ var (
 		"VM template spec")
 	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
+	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
 )
 
 func main() {
@@ -42,7 +43,7 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := kubevmshim.NewShim(*config, *connect)
+	svc, err := kubevmshim.NewShim(*config, *connect, *kubeconfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
