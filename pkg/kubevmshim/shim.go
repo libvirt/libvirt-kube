@@ -30,6 +30,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/designer"
@@ -56,7 +58,14 @@ func init() {
 	go runEventLoop()
 }
 
-func NewShim(templateFile string, libvirtURI string, kubeconfig string) (*Shim, error) {
+func getKubeConfig(kubeconfig string) (*rest.Config, error) {
+	if kubeconfig != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	return rest.InClusterConfig()
+}
+
+func NewShim(templateFile string, libvirtURI string, kubeconfigfile string) (*Shim, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
