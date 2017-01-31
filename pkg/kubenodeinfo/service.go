@@ -20,17 +20,19 @@
 package kubenodeinfo
 
 import (
+	"time"
+
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api"
+	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi"
-	kubeapiv1 "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
+
+	"libvirt.org/libvirt-kube/pkg/api"
+	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/nodeinfo"
-	"time"
 )
 
 // Retry every 5 seconds for 30 seconds, then every 15 seconds
@@ -49,7 +51,7 @@ type Hypervisor struct {
 type Service struct {
 	hypervisor Hypervisor
 	clientset  *kubernetes.Clientset
-	nodeinfo   *kubeapiv1.Virtnode
+	nodeinfo   *apiv1.Virtnode
 	tprclient  *rest.RESTClient
 }
 
@@ -82,14 +84,14 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 		return nil, err
 	}
 
-	err = kubeapi.RegisterResourceExtension(clientset, "virtnode.libvirt.org", "libvirt.org", "virtnodes", "v1alpha1", "Virt nodes")
+	err = api.RegisterResourceExtension(clientset, "virtnode.libvirt.org", "libvirt.org", "virtnodes", "v1alpha1", "Virt nodes")
 	if err != nil {
 		return nil, err
 	}
 
-	kubeapi.RegisterResourceScheme("libvirt.org", "v1alpha1", &kubeapiv1.Virtnode{}, &kubeapiv1.VirtnodeList{})
+	api.RegisterResourceScheme("libvirt.org", "v1alpha1", &apiv1.Virtnode{}, &apiv1.VirtnodeList{})
 
-	tprclient, err := kubeapi.GetResourceClient(kubeconfig, "libvirt.org", "v1alpha1")
+	tprclient, err := api.GetResourceClient(kubeconfig, "libvirt.org", "v1alpha1")
 	if err != nil {
 		return nil, err
 	}
@@ -106,12 +108,12 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 	return shim, nil
 }
 
-func (s *Service) updateNode(phase kubeapiv1.VirtnodePhase) error {
-	if phase == kubeapiv1.VirtnodeReady {
+func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
+	if phase == apiv1.VirtnodeReady {
 		nodeinfo, err := nodeinfo.VirtNodeFromHypervisor(s.hypervisor.conn)
 		if err != nil {
 			if s.nodeinfo != nil {
-				s.nodeinfo.Status.Phase = kubeapiv1.VirtnodeFailed
+				s.nodeinfo.Status.Phase = apiv1.VirtnodeFailed
 			} else {
 				glog.V(1).Info("No previous nodeinfo, returning")
 				return nil
@@ -128,7 +130,7 @@ func (s *Service) updateNode(phase kubeapiv1.VirtnodePhase) error {
 		}
 	}
 
-	res := s.tprclient.Get().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Do()
+	res := s.tprclient.Get().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Do()
 	err := res.Error()
 
 	if err != nil {
@@ -136,17 +138,17 @@ func (s *Service) updateNode(phase kubeapiv1.VirtnodePhase) error {
 			return err
 		}
 		glog.V(1).Info("Creating initial record")
-		res = s.tprclient.Post().Resource("virtnodes").Namespace(api.NamespaceDefault).Body(s.nodeinfo).Do()
+		res = s.tprclient.Post().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Body(s.nodeinfo).Do()
 	} else {
 		glog.V(1).Info("Updating existing record")
-		res = s.tprclient.Put().Resource("virtnodes").Namespace(api.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Body(s.nodeinfo).Do()
+		res = s.tprclient.Put().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Body(s.nodeinfo).Do()
 	}
 
 	err = res.Error()
 	if err != nil {
 		glog.Errorf("Unable to update node info %s", err)
 	} else {
-		var result kubeapiv1.Virtnode
+		var result apiv1.Virtnode
 		res.Into(&result)
 		glog.V(1).Infof("Result %s", result)
 	}
@@ -189,7 +191,7 @@ func (s *Service) Run() error {
 		case reason := <-s.hypervisor.closed:
 			glog.V(1).Infof("Saw hypervisor disconnect reason %d", reason)
 			s.disconnect()
-			s.updateNode(kubeapiv1.VirtnodeOffline)
+			s.updateNode(apiv1.VirtnodeOffline)
 		default:
 			// Cause select to be non-blocking if not hv is not closed
 		}
@@ -209,7 +211,7 @@ func (s *Service) Run() error {
 
 		if s.hypervisor.conn != nil {
 			glog.V(1).Info("Updating node info")
-			s.updateNode(kubeapiv1.VirtnodeReady)
+			s.updateNode(apiv1.VirtnodeReady)
 			time.Sleep(15 * time.Second)
 		}
 	}

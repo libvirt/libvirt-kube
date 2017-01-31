@@ -1,4 +1,4 @@
-package kubeapi
+package api
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api"
+	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/rest"
 )
@@ -58,12 +58,12 @@ func RegisterResourceScheme(group string, version string, obj, objlist runtime.O
 				},
 				obj,
 				objlist,
-				&api.ListOptions{},
-				&api.DeleteOptions{},
+				&kubeapi.ListOptions{},
+				&kubeapi.DeleteOptions{},
 			)
 			return nil
 		})
-	schemeBuilder.AddToScheme(api.Scheme)
+	schemeBuilder.AddToScheme(kubeapi.Scheme)
 }
 
 func isResourceReady(clientset *kubernetes.Clientset, group string, name string, version string) (bool, error) {
@@ -103,7 +103,7 @@ func GetResourceClient(config *rest.Config, group string, version string) (*rest
 	}
 	tprconfig.APIPath = "/apis"
 	tprconfig.ContentType = runtime.ContentTypeJSON
-	tprconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: api.Codecs}
+	tprconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: kubeapi.Codecs}
 
 	return rest.RESTClientFor(&tprconfig)
 }

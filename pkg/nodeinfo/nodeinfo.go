@@ -21,13 +21,15 @@ package nodeinfo
 
 import (
 	"fmt"
+
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
+
+	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 )
 
-func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
+func VirtNodeFromHypervisor(conn *libvirt.Connect) (*apiv1.Virtnode, error) {
 	capsxml, err := conn.GetCapabilities()
 	if err != nil {
 		return nil, err
@@ -38,7 +40,7 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 		return nil, err
 	}
 
-	guests := make([]kubeapi.VirtnodeGuest, 0)
+	guests := make([]apiv1.VirtnodeGuest, 0)
 
 	for _, cguest := range caps.Guests {
 		for _, cdom := range cguest.Arch.Domains {
@@ -52,7 +54,7 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 			for _, cmach := range cmachines {
 				machines = append(machines, cmach.Name)
 			}
-			guests = append(guests, kubeapi.VirtnodeGuest{
+			guests = append(guests, apiv1.VirtnodeGuest{
 				Hypervisor: cdom.Type,
 				Arch:       cguest.Arch.Name,
 				Type:       cguest.OSType,
@@ -61,26 +63,26 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 		}
 	}
 
-	cells := make([]kubeapi.VirtnodeNUMACell, 0)
+	cells := make([]apiv1.VirtnodeNUMACell, 0)
 	if caps.Host.NUMA != nil {
 		for _, lvcell := range caps.Host.NUMA.Cells {
 			ncpus := len(lvcell.CPUS)
-			memory := make([]kubeapi.VirtnodeMemory, 0)
+			memory := make([]apiv1.VirtnodeMemory, 0)
 			if lvcell.PageInfo == nil {
-				memory = append(memory, kubeapi.VirtnodeMemory{
+				memory = append(memory, apiv1.VirtnodeMemory{
 					PageSize: 4096,
 					Present:  lvcell.Memory.Size / 4,
 				})
 			} else {
 				for _, lvpage := range lvcell.PageInfo {
-					memory = append(memory, kubeapi.VirtnodeMemory{
+					memory = append(memory, apiv1.VirtnodeMemory{
 						PageSize: lvpage.Size,
 						Present:  lvpage.Count,
 					})
 				}
 			}
-			cells = append(cells, kubeapi.VirtnodeNUMACell{
-				CPU: kubeapi.VirtnodeCPU{
+			cells = append(cells, apiv1.VirtnodeNUMACell{
+				CPU: apiv1.VirtnodeCPU{
 					Avail: ncpus,
 					Used:  0,
 				},
@@ -93,13 +95,13 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 			return nil, err
 		}
 		ncpus := int(nodeinfo.Nodes * nodeinfo.Sockets * nodeinfo.Cores * nodeinfo.Threads)
-		memory := make([]kubeapi.VirtnodeMemory, 0)
-		memory = append(memory, kubeapi.VirtnodeMemory{
+		memory := make([]apiv1.VirtnodeMemory, 0)
+		memory = append(memory, apiv1.VirtnodeMemory{
 			PageSize: 4096,
 			Present:  nodeinfo.Memory / 4,
 		})
-		cells = append(cells, kubeapi.VirtnodeNUMACell{
-			CPU: kubeapi.VirtnodeCPU{
+		cells = append(cells, apiv1.VirtnodeNUMACell{
+			CPU: apiv1.VirtnodeCPU{
 				Avail: ncpus,
 				Used:  0,
 			},
@@ -107,18 +109,18 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*kubeapi.Virtnode, error) {
 		})
 	}
 
-	resources := kubeapi.VirtnodeResources{
+	resources := apiv1.VirtnodeResources{
 		NUMACells: cells,
 	}
 
-	info := &kubeapi.Virtnode{
+	info := &apiv1.Virtnode{
 		Metadata: v1.ObjectMeta{
 			Name: fmt.Sprintf("virtnode-%s", caps.Host.UUID),
 		},
-		Status: kubeapi.VirtnodeStatus{
-			Phase: kubeapi.VirtnodeReady,
+		Status: apiv1.VirtnodeStatus{
+			Phase: apiv1.VirtnodeReady,
 		},
-		Spec: kubeapi.VirtnodeSpec{
+		Spec: apiv1.VirtnodeSpec{
 			UUID:      caps.Host.UUID,
 			Arch:      caps.Host.CPU.Arch,
 			Guests:    guests,

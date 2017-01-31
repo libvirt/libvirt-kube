@@ -31,14 +31,14 @@ import (
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/client-go/kubernetes"
 
+	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/designer"
-	kubeapi "libvirt.org/libvirt-kube/pkg/kubeapi/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/resource"
 )
 
 type Shim struct {
 	clientset  *kubernetes.Clientset
-	template   *kubeapi.VirttemplateSpec
+	template   *apiv1.VirttemplateSpec
 	hypervisor *libvirt.Connect
 	domain     *libvirt.Domain
 	shutdown   chan bool
@@ -77,7 +77,7 @@ func NewShim(templateFile string, libvirtURI string, kubeconfig string) (*Shim, 
 		return nil, err
 	}
 
-	template := &kubeapi.VirttemplateSpec{}
+	template := &apiv1.VirttemplateSpec{}
 	err = yaml.Unmarshal(templateYAML, &template)
 	if err != nil {
 		return nil, err
