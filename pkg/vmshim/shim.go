@@ -126,6 +126,9 @@ func (s *Shim) Run() error {
 		domdesign.SetResourcePartition(partition)
 	}
 	err = domdesign.ApplyVirtTemplate(s.template)
+	if err != nil {
+		return err
+	}
 
 	cfg := domdesign.Domain
 
@@ -140,10 +143,29 @@ func (s *Shim) Run() error {
 		return fmt.Errorf("Domain with UUID %s already exists", cfg.Name)
 	}
 
+	for _, secdesign := range domdesign.Secrets {
+		secCFG, err := secdesign.Secret.Marshal()
+		if err != nil {
+			return err
+		}
+		sec, err := s.hypervisor.SecretDefineXML(secCFG, 0)
+		if err != nil {
+			return err
+		}
+		defer sec.Undefine()
+
+		glog.V(1).Infof("Setting secret %s value", secdesign.Secret.UUID)
+		err = sec.SetValue(secdesign.Value, 0)
+		if err != nil {
+			return err
+		}
+	}
+
 	cfgXML, err := cfg.Marshal()
 	if err != nil {
 		return err
 	}
+	glog.V(1).Infof("Creating domain %s", cfg.UUID)
 	s.domain, err = s.hypervisor.DomainCreateXML(cfgXML,
 		libvirt.DOMAIN_START_AUTODESTROY|libvirt.DOMAIN_START_VALIDATE)
 	if err != nil {

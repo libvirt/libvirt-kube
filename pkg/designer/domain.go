@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go-xml"
 	"github.com/twinj/uuid"
 	"k8s.io/client-go/kubernetes"
@@ -14,9 +15,15 @@ import (
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 )
 
+type DomainDesignerSecret struct {
+	Secret *libvirtxml.Secret
+	Value  []byte
+}
+
 type DomainDesigner struct {
 	clientset *kubernetes.Clientset
 	Domain    *libvirtxml.Domain
+	Secrets   []DomainDesignerSecret
 }
 
 func NewDomainDesigner(clientset *kubernetes.Clientset) *DomainDesigner {
@@ -138,6 +145,35 @@ func (d *DomainDesigner) setCPUConfig(tmpl *apiv1.VirttemplateSpec) error {
 func (d *DomainDesigner) setDiskConfigRBD(src *kubeapiv1.RBDVolumeSource, disk *libvirtxml.DomainDisk) error {
 	disk.Type = "network"
 
+	key, err := api.GetVolumeRBDKey(d.clientset, kubeapi.NamespaceDefault, src)
+	if err != nil {
+		return err
+	}
+
+	secret := &libvirtxml.Secret{
+		Description: fmt.Sprintf("Key for RBD for domain %s", d.Domain.UUID),
+		Private:     "yes",
+		Ephemeral:   "yes",
+		UUID:        uuid.NewV4().String(),
+		Usage: &libvirtxml.SecretUsage{
+			Type: "ceph",
+			Name: src.CephMonitors[0],
+		},
+	}
+
+	d.Secrets = append(d.Secrets, DomainDesignerSecret{
+		Secret: secret,
+		Value:  key,
+	})
+
+	disk.Auth = &libvirtxml.DomainDiskAuth{
+		Username: src.RadosUser,
+		Secret: &libvirtxml.DomainDiskSecret{
+			Type: "ceph",
+			UUID: secret.UUID,
+		},
+	}
+
 	disk.Source = &libvirtxml.DomainDiskSource{
 		Protocol: "rbd",
 		Name:     src.RBDPool + "/" + src.RBDImage,
@@ -207,7 +243,11 @@ func (d *DomainDesigner) setDiskConfig(tmpl *apiv1.VirttemplateSpec, disk *apiv1
 	} else if src.ISCSI != nil {
 		err = d.setDiskConfigISCSI(src.ISCSI, &diskConfig)
 	} else {
-		return fmt.Errorf("Unsupported persistent volume source on %s", pvname)
+		err = fmt.Errorf("Unsupported persistent volume source on %s", pvname)
+	}
+	if err != nil {
+		glog.V(1).Infof("Failed to setup disk %s", err)
+		return err
 	}
 
 	devs.Disks = append(devs.Disks, diskConfig)
