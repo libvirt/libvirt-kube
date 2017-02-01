@@ -121,10 +121,13 @@ func (s *Shim) Run() error {
 	}
 	glog.V(1).Infof("Using partition %s", partition)
 
-	cfg, err := designer.DomainConfigFromVirtTemplate(s.clientset, s.template, partition)
-	if err != nil {
-		return err
+	domdesign := designer.NewDomainDesigner(s.clientset)
+	if partition != "" {
+		domdesign.SetResourcePartition(partition)
 	}
+	err = domdesign.ApplyVirtTemplate(s.template)
+
+	cfg := domdesign.Domain
 
 	dom, _ := s.hypervisor.LookupDomainByUUIDString(cfg.UUID)
 	if dom != nil {
