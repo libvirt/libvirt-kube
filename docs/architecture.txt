@@ -29,11 +29,16 @@ achieve this there are a few central requirements
    Sets, etc must all be capable of launching VMs in the
    normal manner
 
- - The VM configuration MUST be part of the container image
+ - The VM configuration MUST be associated with the container image
 
    ie the various facilities like Deployment, CronJob,
    Pet Sets, etc must see the container image as the entire
-   thing to be launched
+   thing to be launched. The configuration does not need to
+   be fully expressed in the container image spec though,
+   the image spec could refer to an external entity that
+   contains the image, as long as the schedular can also
+   get access to the key config info it needs to make
+   decisions with
 
  - The schedular MUST be able to do placement via VM info
 
@@ -63,10 +68,11 @@ components will be required
 
    A shim distributed in the docker image, that is the
    init process for the container. It reads the config
-   file from the image, and constructs the corresponding
-   XML for a specific instance. It connects to libvirtd
-   and spawns the VM. It uses AUTODESTROY flag to ensure
-   that libvirt kills the VM when the container is stopped.
+   file from the VirtTemplate third party resource, and
+   constructs the corresponding XML for a specific instance.
+   It connects to libvirtd and spawns the VM. It uses
+   AUTODESTROY flag to ensure that libvirt kills the VM
+   when the container is stopped.
 
    This is used when running against a Kubernetes install
    that uses Docker (or an other similar impl) as the CRI
@@ -74,13 +80,20 @@ components will be required
  - virtkubecri
 
    A CRI implementation for kubelet that can read the
-   config from container image and directly talk to
-   libvirtd to launch the VM.
+   virt template TPR and then directly talk to libvirtd
+   to launch the VM. There is no real "image" that is
+   being launched - it uses a virtual "host" image that
+   indicates everything required is already present on
+   the host
 
    This allows for libvirt native integration without
    having Docker in the mix. This reduces complexity
    of the stack, and gives stronger guarantees about
    VM shutdown when a container is stopped.
+
+   It would be possible to extend this to let is run
+   normal docker images by talking to libvirtd LXC
+   driver
 
  - virtkubenodeinfo
 
@@ -90,28 +103,12 @@ components will be required
    via a custom "VirtNode" resource type, as well as
    "VirtDomain" for each running VM.
 
- - virtkubeapi
-
-   A process that runs in the cluster solely to register
-   the custom resource types with Kube API.
-   
-     - VirtNode provides info about the virt node.
-     - VirtTemplate provides template of a VM config.
-     - VirtDomain provides info about a running VM
-
  - virtkubesched
 
    A kubernetes schedular extender. This consumes info
    from the VirtNode resource type and the VirtTemplate
    associated with the container and uses that to
    refine Kube's view of which host to run the VM on.
-
-
- - virtkubeimage
-
-   Implements the Docker image registry protocol to
-   serve docker images containing the virtkubeletshim
-   and the VirtTemplate serialized configuration.
 
 
 Control flows
@@ -123,12 +120,12 @@ Cluster setup flow
 For a Docker based cluster:
 
  - Deploy a "virthost" POD that provides libvirtd,
-   virtkubeletinfo and QEMU, to kube nodes
+   virtkubenodeinfo and QEMU, to kube nodes
 
 For a Docker-less cluster:
 
- - Provision Kubernetes using the virtkubetletcri
-   daemon, libvirtd, virtkubeletinfo and QEMU to
+ - Provision Kubernetes using the virtkubecri
+   daemon, libvirtd, virtkubenodeinfo and QEMU to
    bare metal hosts
 
 
