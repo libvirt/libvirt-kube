@@ -24,7 +24,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
@@ -71,7 +70,7 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
+func NewService(libvirtURI string, kubeconfigfile string, nodename string) (*Service, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
@@ -92,12 +91,18 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 		return nil, err
 	}
 
+	nodeinfo, err := nodeinfoclient.Get(nodename)
+	if err != nil {
+		return nil, err
+	}
+
 	shim := &Service{
 		hypervisor: Hypervisor{
 			closed: make(chan libvirt.ConnectCloseReason, 1),
 			uri:    libvirtURI,
 		},
 		nodeinfoclient: nodeinfoclient,
+		nodeinfo:       nodeinfo,
 	}
 
 	return shim, nil
@@ -125,24 +130,15 @@ func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
 		}
 	}
 
-	obj, err := s.nodeinfoclient.Get(s.nodeinfo.Metadata.Name)
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-
-	if err != nil {
-		glog.V(1).Info("Creating initial record")
-		obj, err = s.nodeinfoclient.Create(s.nodeinfo)
-	} else {
-		glog.V(1).Info("Updating existing record")
-		obj, err = s.nodeinfoclient.Update(s.nodeinfo)
-	}
+	glog.V(1).Info("Updating existing record")
+	obj, err := s.nodeinfoclient.Update(s.nodeinfo)
 
 	if err != nil {
 		glog.Errorf("Unable to update node info %s", err)
-	} else {
-		glog.V(1).Infof("Result %s", obj)
+		return err
 	}
+	glog.V(1).Infof("Result %s", obj)
+	s.nodeinfo = obj
 
 	return nil
 }
