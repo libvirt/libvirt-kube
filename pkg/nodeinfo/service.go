@@ -48,10 +48,9 @@ type Hypervisor struct {
 }
 
 type Service struct {
-	hypervisor Hypervisor
-	clientset  *kubernetes.Clientset
-	nodeinfo   *apiv1.Virtnode
-	tprclient  *rest.RESTClient
+	hypervisor     Hypervisor
+	nodeinfo       *apiv1.Virtnode
+	nodeinfoclient *api.VirtnodeinfoClient
 }
 
 func eventloop() {
@@ -83,14 +82,12 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 		return nil, err
 	}
 
-	err = api.RegisterResourceExtension(clientset, "virtnode.libvirt.org", "libvirt.org", "virtnodes", "v1alpha1", "Virt nodes")
+	err = api.RegisterVirtnodeinfo(clientset)
 	if err != nil {
 		return nil, err
 	}
 
-	api.RegisterResourceScheme("libvirt.org", "v1alpha1", &apiv1.Virtnode{}, &apiv1.VirtnodeList{})
-
-	tprclient, err := api.GetResourceClient(kubeconfig, "libvirt.org", "v1alpha1")
+	nodeinfoclient, err := api.NewVirtnodeinfoClient(kubeapi.NamespaceDefault, kubeconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -100,8 +97,7 @@ func NewService(libvirtURI string, kubeconfigfile string) (*Service, error) {
 			closed: make(chan libvirt.ConnectCloseReason, 1),
 			uri:    libvirtURI,
 		},
-		clientset: clientset,
-		tprclient: tprclient,
+		nodeinfoclient: nodeinfoclient,
 	}
 
 	return shim, nil
@@ -129,27 +125,23 @@ func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
 		}
 	}
 
-	res := s.tprclient.Get().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Do()
-	err := res.Error()
-
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-		glog.V(1).Info("Creating initial record")
-		res = s.tprclient.Post().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Body(s.nodeinfo).Do()
-	} else {
-		glog.V(1).Info("Updating existing record")
-		res = s.tprclient.Put().Resource("virtnodes").Namespace(kubeapi.NamespaceDefault).Name(s.nodeinfo.Metadata.Name).Body(s.nodeinfo).Do()
+	obj, err := s.nodeinfoclient.Get(s.nodeinfo.Metadata.Name)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
 	}
 
-	err = res.Error()
+	if err != nil {
+		glog.V(1).Info("Creating initial record")
+		obj, err = s.nodeinfoclient.Create(s.nodeinfo)
+	} else {
+		glog.V(1).Info("Updating existing record")
+		obj, err = s.nodeinfoclient.Update(s.nodeinfo)
+	}
+
 	if err != nil {
 		glog.Errorf("Unable to update node info %s", err)
 	} else {
-		var result apiv1.Virtnode
-		res.Into(&result)
-		glog.V(1).Infof("Result %s", result)
+		glog.V(1).Infof("Result %s", obj)
 	}
 
 	return nil
