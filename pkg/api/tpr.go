@@ -107,3 +107,30 @@ func GetResourceClient(config *rest.Config, group string, version string) (*rest
 
 	return rest.RESTClientFor(&tprconfig)
 }
+
+type TPRClient struct {
+	ResourceName string
+	Namespace    string
+	Rest         *rest.RESTClient
+}
+
+func (c *TPRClient) Get(name string) rest.Result {
+	if name == "" {
+		return c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Do()
+	} else {
+		return c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do()
+	}
+}
+
+func (c *TPRClient) Put(name string, obj runtime.Object) rest.Result {
+	// TODO: pulling 'name' out of 'obj' would be nice
+	return c.Rest.Put().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Body(obj).Do()
+}
+
+func (c *TPRClient) Post(obj runtime.Object) rest.Result {
+	return c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Body(obj).Do()
+}
+
+func (c *TPRClient) Delete(name string) rest.Result {
+	return c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do()
+}
