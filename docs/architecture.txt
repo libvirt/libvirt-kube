@@ -110,6 +110,13 @@ components will be required
    associated with the container and uses that to
    refine Kube's view of which host to run the VM on.
 
+ - virtimagerepo
+
+   A process that uses a persistent volume mount to
+   manage image files. It is associated with a
+   Virtimagerepo TPR and populates Virtimagefile
+   TPRs for each managed file
+
 
 Control flows
 =============

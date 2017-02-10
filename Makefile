@@ -1,5 +1,5 @@
 
-COMMANDS = virtkubecri virtkubevmshim virtkubenodeinfo
+COMMANDS = virtkubecri virtkubevmshim virtkubenodeinfo virtkubeimagerepo
 
 BINARIES = $(COMMANDS:%=build/%)
 
