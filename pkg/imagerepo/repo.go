@@ -21,6 +21,7 @@ package imagerepo
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 
 	"github.com/golang/glog"
@@ -87,13 +88,17 @@ type Repository struct {
 	files []*RepositoryFile
 }
 
-func makePoolName(path string) string {
+func escapeFilename(name string) string {
+	re := regexp.MustCompile("/")
+	return re.ReplaceAllLiteralString(name, "_")
+}
+
+func escapeObjname(path string) string {
 	re := regexp.MustCompile("[^a-zA-Z0-9_-]")
 	return re.ReplaceAllLiteralString(path, "_")
 }
 func makeVolName(path, format string) string {
-	re := regexp.MustCompile("[^a-zA-Z0-9_-]")
-	base := re.ReplaceAllLiteralString(path, "_")
+	base := escapeObjname(path)
 	return fmt.Sprintf("%s.%s", base, format)
 }
 
@@ -186,7 +191,7 @@ func jobWorker(pendingJobs chan RepositoryJob, completedJobs chan RepositoryJob)
 	glog.V(1).Info("Job worker exiting")
 }
 
-func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.VirtimagefileClient, resource *apiv1.Virtimagerepo, path string) *Repository {
+func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.VirtimagefileClient, resource *apiv1.Virtimagerepo, repopath string) *Repository {
 	pendingJobs := make(chan RepositoryJob, 100)
 	completedJobs := make(chan RepositoryJob, 100)
 
@@ -198,12 +203,16 @@ func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.Virti
 		go jobWorker(pendingJobs, completedJobs)
 	}
 
+	name := resource.Metadata.Name
+
+	fullpath := path.Join(repopath, name)
+
 	return &Repository{
 		repoclient:    repoclient,
 		fileclient:    fileclient,
 		resource:      resource,
-		path:          path,
-		poolname:      makePoolName(path),
+		path:          fullpath,
+		poolname:      escapeObjname(name),
 		pendingJobs:   pendingJobs,
 		completedJobs: completedJobs,
 	}
@@ -256,7 +265,7 @@ func (r *Repository) createPool(conn *libvirt.Connect) (*libvirt.StoragePool, er
 	}
 
 	glog.V(1).Infof("Creating storage pool '%s' at '%s'", r.poolname, r.path)
-	pool, err := conn.StoragePoolCreateXML(poolXML, 0)
+	pool, err := conn.StoragePoolCreateXML(poolXML, libvirt.STORAGE_POOL_CREATE_WITH_BUILD)
 	if err != nil {
 		return nil, err
 	}
