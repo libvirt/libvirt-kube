@@ -30,36 +30,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"libvirt.org/libvirt-kube/pkg/api"
+	"libvirt.org/libvirt-kube/pkg/hypervisor"
 )
 
-// Retry every 5 seconds for 30 seconds, then every 15 seconds
-// for another minute, then every 60 seconds thereafter
-var reconnectDelay = []int{
-	5, 5, 5, 5, 5, 5, 15, 15, 15, 15, 60,
-}
-
-type Hypervisor struct {
-	uri            string
-	closed         chan libvirt.ConnectCloseReason
-	conn           *libvirt.Connect
-	reconnectDelay int
-}
-
 type Service struct {
-	hypervisor Hypervisor
+	conn       *libvirt.Connect
+	connNotify chan hypervisor.ConnectEvent
 	clientset  *kubernetes.Clientset
 	repo       *Repository
-}
-
-func eventloop() {
-	for {
-		libvirt.EventRunDefaultImpl()
-	}
-}
-
-func init() {
-	libvirt.EventRegisterDefaultImpl()
-	go eventloop()
 }
 
 func getKubeConfig(kubeconfig string) (*rest.Config, error) {
@@ -107,48 +85,21 @@ func NewService(libvirtURI string, kubeconfigfile string, reponame string, repop
 
 	glog.V(1).Infof("Got repo %s", imagerepo)
 
-	shim := &Service{
-		hypervisor: Hypervisor{
-			closed: make(chan libvirt.ConnectCloseReason, 1),
-			uri:    libvirtURI,
-		},
-		clientset: clientset,
-		repo:      CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
+	svc := &Service{
+		connNotify: make(chan hypervisor.ConnectEvent, 1),
+		clientset:  clientset,
+		repo:       CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
 	}
 
-	return shim, nil
-}
+	hypervisor.OpenConnect(libvirtURI, svc.connNotify)
 
-func (s *Service) libvirtClosed(conn *libvirt.Connect, reason libvirt.ConnectCloseReason) {
-	glog.V(1).Infof("Notify about connection close %d", reason)
-	s.hypervisor.closed <- reason
-}
-
-func (s *Service) connect() error {
-	glog.V(1).Infof("Trying to connect to %s", s.hypervisor.uri)
-	conn, err := libvirt.NewConnect(s.hypervisor.uri)
-	if err != nil {
-		return err
-	}
-
-	s.hypervisor.conn = conn
-	s.hypervisor.closed = make(chan libvirt.ConnectCloseReason, 1)
-
-	conn.RegisterCloseCallback(s.libvirtClosed)
-
-	return nil
-}
-
-func (s *Service) disconnect() {
-	glog.V(1).Info("Disconnecting from closed libvirt connection")
-	s.hypervisor.conn.UnregisterCloseCallback()
-	s.hypervisor.conn.Close()
-	s.hypervisor.conn = nil
-	s.hypervisor.reconnectDelay = 0
+	return svc, nil
 }
 
 func (s *Service) Run() error {
 	glog.V(1).Info("Running image repo service")
+
+	ticker := time.NewTicker(time.Second * 15)
 
 	err := s.repo.loadFileResources()
 	if err != nil {
@@ -157,31 +108,26 @@ func (s *Service) Run() error {
 
 	for {
 		select {
-		case reason := <-s.hypervisor.closed:
-			glog.V(1).Infof("Saw hypervisor disconnect reason %d", reason)
-			s.repo.update(nil)
-			s.disconnect()
-		default:
-			// Cause select to be non-blocking if not hv is not closed
-		}
+		case hypEvent := <-s.connNotify:
+			switch hypEvent.Type {
+			case hypervisor.ConnectReady:
+				glog.V(1).Info("Got connection ready event")
+				s.conn = hypEvent.Conn
+				s.repo.update(s.conn)
 
-		if s.hypervisor.conn == nil {
-			err := s.connect()
-			if err != nil {
-				glog.V(1).Infof("Unable to connect to %s, retry in %d seconds: %s",
-					s.hypervisor.uri, reconnectDelay[s.hypervisor.reconnectDelay], err)
-				time.Sleep(time.Duration(reconnectDelay[s.hypervisor.reconnectDelay]) * time.Second)
-				if s.hypervisor.reconnectDelay < (len(reconnectDelay) - 1) {
-					s.hypervisor.reconnectDelay++
-				}
-				s.hypervisor.reconnectDelay = 0
+			case hypervisor.ConnectFailed:
+				s.conn.Close()
+				s.conn = nil
+				glog.V(1).Info("Got connection failed event")
+				s.repo.update(s.conn)
 			}
-		}
-
-		if s.hypervisor.conn != nil {
-			glog.V(1).Info("Updating node info")
-			s.repo.update(s.hypervisor.conn)
-			time.Sleep(15 * time.Second)
+		case <-ticker.C:
+			if s.conn != nil {
+				glog.V(1).Info("Updating repo")
+				s.repo.update(s.conn)
+			} else {
+				glog.V(1).Info("Not connected, skipping update")
+			}
 		}
 	}
 

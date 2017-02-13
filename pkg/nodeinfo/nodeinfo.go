@@ -20,24 +20,21 @@
 package nodeinfo
 
 import (
-	"fmt"
-
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 )
 
-func VirtNodeFromHypervisor(conn *libvirt.Connect) (*apiv1.Virtnode, error) {
+func VirtNodeUpdateFromHypervisor(node *apiv1.Virtnode, conn *libvirt.Connect) error {
 	capsxml, err := conn.GetCapabilities()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	caps := libvirtxml.Caps{}
 	if err = caps.Unmarshal(capsxml); err != nil {
-		return nil, err
+		return err
 	}
 
 	guests := make([]apiv1.VirtnodeGuest, 0)
@@ -92,7 +89,7 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*apiv1.Virtnode, error) {
 	} else {
 		nodeinfo, err := conn.GetNodeInfo()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		ncpus := int(nodeinfo.Nodes * nodeinfo.Sockets * nodeinfo.Cores * nodeinfo.Threads)
 		memory := make([]apiv1.VirtnodeMemory, 0)
@@ -113,20 +110,12 @@ func VirtNodeFromHypervisor(conn *libvirt.Connect) (*apiv1.Virtnode, error) {
 		NUMACells: cells,
 	}
 
-	info := &apiv1.Virtnode{
-		Metadata: v1.ObjectMeta{
-			Name: fmt.Sprintf("virtnode-%s", caps.Host.UUID),
-		},
-		Status: apiv1.VirtnodeStatus{
-			Phase: apiv1.VirtnodeReady,
-		},
-		Spec: apiv1.VirtnodeSpec{
-			UUID:      caps.Host.UUID,
-			Arch:      caps.Host.CPU.Arch,
-			Guests:    guests,
-			Resources: resources,
-		},
+	node.Spec = apiv1.VirtnodeSpec{
+		UUID:      caps.Host.UUID,
+		Arch:      caps.Host.CPU.Arch,
+		Guests:    guests,
+		Resources: resources,
 	}
 
-	return info, nil
+	return nil
 }

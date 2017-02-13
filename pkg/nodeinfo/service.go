@@ -31,23 +31,12 @@ import (
 
 	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
+	"libvirt.org/libvirt-kube/pkg/hypervisor"
 )
 
-// Retry every 5 seconds for 30 seconds, then every 15 seconds
-// for another minute, then every 60 seconds thereafter
-var reconnectDelay = []int{
-	5, 5, 5, 5, 5, 5, 15, 15, 15, 15, 60,
-}
-
-type Hypervisor struct {
-	uri            string
-	closed         chan libvirt.ConnectCloseReason
-	conn           *libvirt.Connect
-	reconnectDelay int
-}
-
 type Service struct {
-	hypervisor     Hypervisor
+	conn           *libvirt.Connect
+	connNotify     chan hypervisor.ConnectEvent
 	nodeinfo       *apiv1.Virtnode
 	nodeinfoclient *api.VirtnodeinfoClient
 }
@@ -96,37 +85,23 @@ func NewService(libvirtURI string, kubeconfigfile string, nodename string) (*Ser
 		return nil, err
 	}
 
-	shim := &Service{
-		hypervisor: Hypervisor{
-			closed: make(chan libvirt.ConnectCloseReason, 1),
-			uri:    libvirtURI,
-		},
+	svc := &Service{
+		connNotify:     make(chan hypervisor.ConnectEvent, 1),
 		nodeinfoclient: nodeinfoclient,
 		nodeinfo:       nodeinfo,
 	}
 
-	return shim, nil
+	hypervisor.OpenConnect(libvirtURI, svc.connNotify)
+
+	return svc, nil
 }
 
 func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
+	s.nodeinfo.Status.Phase = phase
 	if phase == apiv1.VirtnodeReady {
-		nodeinfo, err := VirtNodeFromHypervisor(s.hypervisor.conn)
+		err := VirtNodeUpdateFromHypervisor(s.nodeinfo, s.conn)
 		if err != nil {
-			if s.nodeinfo != nil {
-				s.nodeinfo.Status.Phase = apiv1.VirtnodeFailed
-			} else {
-				glog.V(1).Info("No previous nodeinfo, returning")
-				return nil
-			}
-		} else {
-			s.nodeinfo = nodeinfo
-		}
-	} else {
-		if s.nodeinfo != nil {
-			s.nodeinfo.Status.Phase = phase
-		} else {
-			glog.V(1).Info("No previous nodeinfo, returning")
-			return nil
+			s.nodeinfo.Status.Phase = apiv1.VirtnodeFailed
 		}
 	}
 
@@ -143,64 +118,35 @@ func (s *Service) updateNode(phase apiv1.VirtnodePhase) error {
 	return nil
 }
 
-func (s *Service) libvirtClosed(conn *libvirt.Connect, reason libvirt.ConnectCloseReason) {
-	glog.V(1).Infof("Notify about connection close %d", reason)
-	s.hypervisor.closed <- reason
-}
-
-func (s *Service) connect() error {
-	glog.V(1).Infof("Trying to connect to %s", s.hypervisor.uri)
-	conn, err := libvirt.NewConnect(s.hypervisor.uri)
-	if err != nil {
-		return err
-	}
-
-	s.hypervisor.conn = conn
-	s.hypervisor.closed = make(chan libvirt.ConnectCloseReason, 1)
-
-	conn.RegisterCloseCallback(s.libvirtClosed)
-
-	return nil
-}
-
-func (s *Service) disconnect() {
-	glog.V(1).Info("Disconnecting from closed libvirt connection")
-	s.hypervisor.conn.UnregisterCloseCallback()
-	s.hypervisor.conn.Close()
-	s.hypervisor.conn = nil
-	s.hypervisor.reconnectDelay = 0
-}
-
 func (s *Service) Run() error {
 	glog.V(1).Info("Running node service")
+
+	ticker := time.NewTicker(time.Second * 15)
+
 	for {
 		select {
-		case reason := <-s.hypervisor.closed:
-			glog.V(1).Infof("Saw hypervisor disconnect reason %d", reason)
-			s.disconnect()
-			s.updateNode(apiv1.VirtnodeOffline)
-		default:
-			// Cause select to be non-blocking if not hv is not closed
-		}
+		case hypEvent := <-s.connNotify:
+			switch hypEvent.Type {
+			case hypervisor.ConnectReady:
+				glog.V(1).Info("Got connection ready event")
+				s.conn = hypEvent.Conn
+				s.updateNode(apiv1.VirtnodeReady)
 
-		if s.hypervisor.conn == nil {
-			err := s.connect()
-			if err != nil {
-				glog.V(1).Infof("Unable to connect to %s, retry in %d seconds: %s",
-					s.hypervisor.uri, reconnectDelay[s.hypervisor.reconnectDelay], err)
-				time.Sleep(time.Duration(reconnectDelay[s.hypervisor.reconnectDelay]) * time.Second)
-				if s.hypervisor.reconnectDelay < (len(reconnectDelay) - 1) {
-					s.hypervisor.reconnectDelay++
-				}
-				s.hypervisor.reconnectDelay = 0
+			case hypervisor.ConnectFailed:
+				s.conn.Close()
+				s.conn = nil
+				glog.V(1).Info("Got connection failed event")
+				s.updateNode(apiv1.VirtnodeOffline)
+			}
+		case <-ticker.C:
+			if s.conn != nil {
+				glog.V(1).Info("Updating node info")
+				s.updateNode(apiv1.VirtnodeReady)
+			} else {
+				glog.V(1).Info("Not connected, skipping update")
 			}
 		}
 
-		if s.hypervisor.conn != nil {
-			glog.V(1).Info("Updating node info")
-			s.updateNode(apiv1.VirtnodeReady)
-			time.Sleep(15 * time.Second)
-		}
 	}
 
 	return nil
