@@ -1,0 +1,7 @@
+metadata:
+  name: virtnode.libvirt.org
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: Virt nodes
+versions:
+  - name: v1alpha1

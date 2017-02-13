@@ -1,0 +1,7 @@
+metadata:
+  name: virtimagerepo.libvirt.org
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: Virt image repositories
+versions:
+  - name: v1alpha1

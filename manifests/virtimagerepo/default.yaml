@@ -1,0 +1,7 @@
+apiVersion: libvirt.org/v1alpha1
+kind: Virtimagerepo
+metadata:
+  name: default
+spec:
+  claimName: imagerepo
+  format: qcow2

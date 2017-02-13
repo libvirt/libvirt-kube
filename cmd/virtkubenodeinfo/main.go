@@ -34,7 +34,7 @@ var (
 		"Libvirt connection URI")
 	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
 
-	nodename = pflag.String("nodename", "127.0.0.1", "Name of virtnode resource to manage")
+	nodename = pflag.String("nodename", "localhost", "Name of virtnode resource to manage")
 )
 
 func main() {

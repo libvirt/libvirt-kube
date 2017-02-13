@@ -1,0 +1,4 @@
+apiVersion: libvirt.org/v1alpha1
+kind: Virtnode
+metadata:
+  name: localhost

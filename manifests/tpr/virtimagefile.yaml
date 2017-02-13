@@ -1,0 +1,7 @@
+metadata:
+  name: virtimagefile.libvirt.org
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: Virt image files
+versions:
+  - name: v1alpha1
