@@ -30,12 +30,12 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"libvirt.org/libvirt-kube/pkg/api"
-	"libvirt.org/libvirt-kube/pkg/hypervisor"
+	"libvirt.org/libvirt-kube/pkg/libvirtutil"
 )
 
 type Service struct {
 	conn       *libvirt.Connect
-	connNotify chan hypervisor.ConnectEvent
+	connNotify chan libvirtutil.ConnectEvent
 	clientset  *kubernetes.Clientset
 	repo       *Repository
 }
@@ -86,12 +86,12 @@ func NewService(libvirtURI string, kubeconfigfile string, reponame string, repop
 	glog.V(1).Infof("Got repo %s", imagerepo)
 
 	svc := &Service{
-		connNotify: make(chan hypervisor.ConnectEvent, 1),
+		connNotify: make(chan libvirtutil.ConnectEvent, 1),
 		clientset:  clientset,
 		repo:       CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
 	}
 
-	hypervisor.OpenConnect(libvirtURI, svc.connNotify)
+	libvirtutil.OpenConnect(libvirtURI, svc.connNotify)
 
 	return svc, nil
 }
@@ -110,12 +110,12 @@ func (s *Service) Run() error {
 		select {
 		case hypEvent := <-s.connNotify:
 			switch hypEvent.Type {
-			case hypervisor.ConnectReady:
+			case libvirtutil.ConnectReady:
 				glog.V(1).Info("Got connection ready event")
 				s.conn = hypEvent.Conn
 				s.repo.update(s.conn)
 
-			case hypervisor.ConnectFailed:
+			case libvirtutil.ConnectFailed:
 				s.conn.Close()
 				s.conn = nil
 				glog.V(1).Info("Got connection failed event")

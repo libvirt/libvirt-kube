@@ -31,12 +31,12 @@ import (
 
 	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
-	"libvirt.org/libvirt-kube/pkg/hypervisor"
+	"libvirt.org/libvirt-kube/pkg/libvirtutil"
 )
 
 type Service struct {
 	conn           *libvirt.Connect
-	connNotify     chan hypervisor.ConnectEvent
+	connNotify     chan libvirtutil.ConnectEvent
 	nodeinfo       *apiv1.Virtnode
 	nodeinfoclient *api.VirtnodeinfoClient
 }
@@ -86,12 +86,12 @@ func NewService(libvirtURI string, kubeconfigfile string, nodename string) (*Ser
 	}
 
 	svc := &Service{
-		connNotify:     make(chan hypervisor.ConnectEvent, 1),
+		connNotify:     make(chan libvirtutil.ConnectEvent, 1),
 		nodeinfoclient: nodeinfoclient,
 		nodeinfo:       nodeinfo,
 	}
 
-	hypervisor.OpenConnect(libvirtURI, svc.connNotify)
+	libvirtutil.OpenConnect(libvirtURI, svc.connNotify)
 
 	return svc, nil
 }
@@ -127,12 +127,12 @@ func (s *Service) Run() error {
 		select {
 		case hypEvent := <-s.connNotify:
 			switch hypEvent.Type {
-			case hypervisor.ConnectReady:
+			case libvirtutil.ConnectReady:
 				glog.V(1).Info("Got connection ready event")
 				s.conn = hypEvent.Conn
 				s.updateNode(apiv1.VirtnodeReady)
 
-			case hypervisor.ConnectFailed:
+			case libvirtutil.ConnectFailed:
 				s.conn.Close()
 				s.conn = nil
 				glog.V(1).Info("Got connection failed event")

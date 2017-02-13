@@ -17,7 +17,7 @@
  *
  */
 
-package hypervisor
+package libvirtutil
 
 import (
 	"time"
