@@ -34,10 +34,11 @@ import (
 )
 
 type Service struct {
-	conn       *libvirt.Connect
-	connNotify chan libvirtutil.ConnectEvent
-	clientset  *kubernetes.Clientset
-	repo       *Repository
+	poolManager *PoolManager
+	conn        *libvirt.Connect
+	connNotify  chan libvirtutil.ConnectEvent
+	clientset   *kubernetes.Clientset
+	repo        *Repository
 }
 
 func getKubeConfig(kubeconfig string) (*rest.Config, error) {
@@ -86,14 +87,32 @@ func NewService(libvirtURI string, kubeconfigfile string, reponame string, repop
 	glog.V(1).Infof("Got repo %s", imagerepo)
 
 	svc := &Service{
-		connNotify: make(chan libvirtutil.ConnectEvent, 1),
-		clientset:  clientset,
-		repo:       CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
+		poolManager: NewPoolManager(reponame, repopath),
+		connNotify:  make(chan libvirtutil.ConnectEvent, 1),
+		clientset:   clientset,
+		repo:        CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
 	}
 
 	libvirtutil.OpenConnect(libvirtURI, svc.connNotify)
 
 	return svc, nil
+}
+
+func (s *Service) connectReady(conn *libvirt.Connect) {
+	glog.V(1).Info("Got connection ready event")
+	s.conn = conn
+
+	s.poolManager.Load(conn)
+
+	conn.Close()
+}
+
+func (s *Service) connectFailed() {
+	glog.V(1).Info("Got connection failed event")
+	s.repo.UnsetPool()
+	s.repo.Refresh()
+	s.conn.Close()
+	s.conn = nil
 }
 
 func (s *Service) Run() error {
@@ -111,23 +130,23 @@ func (s *Service) Run() error {
 		case hypEvent := <-s.connNotify:
 			switch hypEvent.Type {
 			case libvirtutil.ConnectReady:
-				glog.V(1).Info("Got connection ready event")
-				s.conn = hypEvent.Conn
-				s.repo.update(s.conn)
-
+				s.connectReady(hypEvent.Conn)
 			case libvirtutil.ConnectFailed:
-				s.conn.Close()
-				s.conn = nil
-				glog.V(1).Info("Got connection failed event")
-				s.repo.update(s.conn)
+				s.connectFailed()
 			}
-		case <-ticker.C:
+		case pool := <-s.poolManager.Notify:
+			glog.V(1).Infof("Got pool ready %v", pool)
+			// Connection might have closed in meanwhile so check
 			if s.conn != nil {
-				glog.V(1).Info("Updating repo")
-				s.repo.update(s.conn)
-			} else {
-				glog.V(1).Info("Not connected, skipping update")
+				err := s.repo.SetPool(pool)
+				if err != nil {
+					s.repo.Refresh()
+				}
 			}
+			pool.Free()
+		case <-ticker.C:
+			glog.V(1).Info("Updating repo")
+			s.repo.Refresh()
 		}
 	}
 

@@ -85,7 +85,7 @@ type Repository struct {
 
 	pool *libvirt.StoragePool
 
-	files []*RepositoryFile
+	files map[string]*RepositoryFile
 }
 
 func escapeFilename(name string) string {
@@ -224,11 +224,13 @@ func (r *Repository) loadFileResources() error {
 		return err
 	}
 
-	r.files = make([]*RepositoryFile, len(files.Items))
+	r.files = make(map[string]*RepositoryFile)
 
-	for i, file := range files.Items {
+	for _, file := range files.Items {
+		name := makeVolName(file.Metadata.Name, r.resource.Spec.Format)
+
 		glog.V(1).Infof("Loaded file resource %s (%s)", file, file.Metadata.Name)
-		r.files[i] = &RepositoryFile{
+		r.files[name] = &RepositoryFile{
 			resource: file,
 		}
 	}
@@ -236,61 +238,12 @@ func (r *Repository) loadFileResources() error {
 	return nil
 }
 
-func (r *Repository) disconnectHV() {
-	for _, file := range r.files {
-		if file.vol != nil {
-			file.vol.Free()
-			file.vol = nil
-		}
-	}
-
-	if r.pool != nil {
-		r.pool.Free()
-		r.pool = nil
-	}
-}
-
-func (r *Repository) createPool(conn *libvirt.Connect) (*libvirt.StoragePool, error) {
-	poolCFG := libvirtxml.StoragePool{
-		Type: "dir",
-		Name: r.poolname,
-		Target: &libvirtxml.StoragePoolTarget{
-			Path: r.path,
-		},
-	}
-
-	poolXML, err := poolCFG.Marshal()
+func (r *Repository) loadVolumes() error {
+	glog.V(1).Infof("Loading storage volumes from pool")
+	vols, err := r.pool.ListAllStorageVolumes(0)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	glog.V(1).Infof("Creating storage pool '%s' at '%s'", r.poolname, r.path)
-	pool, err := conn.StoragePoolCreateXML(poolXML, libvirt.STORAGE_POOL_CREATE_WITH_BUILD)
-	if err != nil {
-		return nil, err
-	}
-
-	return pool, nil
-}
-
-func (r *Repository) connectHV(conn *libvirt.Connect) error {
-	glog.V(1).Infof("Connected to HV")
-	pool, err := conn.LookupStoragePoolByName(r.poolname)
-	if err != nil {
-		lverr, ok := err.(libvirt.Error)
-		if ok && lverr.Code == libvirt.ERR_NO_STORAGE_POOL {
-			pool, err = r.createPool(conn)
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	r.pool = pool
-
-	vols, err := pool.ListAllStorageVolumes(0)
 
 	volNames := make(map[string]*libvirt.StorageVol)
 	for i, vol := range vols {
@@ -371,7 +324,7 @@ func (r *Repository) refreshVol(file *RepositoryFile) error {
 	return nil
 }
 
-func (r *Repository) refreshHV() error {
+func (r *Repository) refreshSizes() error {
 	glog.V(1).Infof("Refresh HV status")
 	info, err := r.pool.GetInfo()
 	if err != nil {
@@ -383,13 +336,13 @@ func (r *Repository) refreshHV() error {
 
 	// XXX update Commitment field - hard....
 
-	for _, file := range r.files {
+	for name, file := range r.files {
 		if file.vol == nil {
-			glog.V(1).Infof("Vol %s not ready, skipping refresh", file.resource.Metadata.Name)
+			glog.V(1).Infof("Vol %s not ready, skipping refresh", name)
 			continue
 		}
 
-		glog.V(1).Infof("Vol %s ready, refresh", file.resource.Metadata.Name)
+		glog.V(1).Infof("Vol %s ready, refresh", name)
 		err = r.refreshVol(file)
 		if err != nil {
 			glog.Errorf("Unable to refresh vol info %s", err)
@@ -410,43 +363,7 @@ func (r *Repository) refreshHV() error {
 	return nil
 }
 
-func (r *Repository) update(conn *libvirt.Connect) error {
-	glog.V(1).Info("Updating existing record")
-
-	for done := false; !done; {
-		select {
-		case job := <-r.completedJobs:
-			job.Finish(r)
-		default:
-			done = true
-		}
-	}
-
-	if conn == nil {
-		if r.pool == nil {
-			return nil
-		}
-		r.disconnectHV()
-		r.resource.Status.Phase = apiv1.VirtimagerepoOffline
-	} else {
-		if r.pool == nil {
-			err := r.connectHV(conn)
-			if err != nil {
-				glog.Errorf("Unable to initialize HV %s", err)
-				r.resource.Status.Phase = apiv1.VirtimagerepoFailed
-			} else {
-				r.resource.Status.Phase = apiv1.VirtimagerepoReady
-			}
-		}
-		if r.pool != nil {
-			err := r.refreshHV()
-			if err != nil {
-				r.disconnectHV()
-				r.resource.Status.Phase = apiv1.VirtimagerepoFailed
-			}
-		}
-	}
-
+func (r *Repository) saveRepo() error {
 	obj, err := r.repoclient.Update(r.resource)
 
 	if err != nil {
@@ -457,6 +374,73 @@ func (r *Repository) update(conn *libvirt.Connect) error {
 	r.resource = obj
 
 	glog.V(1).Infof("Repo Result %s %d", obj, obj.Metadata.ResourceVersion)
+	return nil
+}
 
+func (r *Repository) Refresh() error {
+	glog.V(1).Info("Updating repo state")
+
+	for done := false; !done; {
+		select {
+		case job := <-r.completedJobs:
+			job.Finish(r)
+		default:
+			done = true
+		}
+	}
+
+	if r.pool == nil {
+		return nil
+	}
+
+	err := r.refreshSizes()
+	if err != nil {
+		r.resource.Status.Phase = apiv1.VirtimagerepoFailed
+	} else {
+		r.resource.Status.Phase = apiv1.VirtimagerepoReady
+	}
+
+	if err = r.saveRepo(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) SetPool(pool *libvirt.StoragePool) error {
+	glog.V(1).Infof("Setting pool %v", pool)
+	r.pool = pool
+	r.pool.Ref()
+
+	err := r.loadVolumes()
+	if err != nil {
+		r.resource.Status.Phase = apiv1.VirtimagerepoFailed
+	} else {
+		r.resource.Status.Phase = apiv1.VirtimagerepoReady
+	}
+
+	if err := r.saveRepo(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Repository) UnsetPool() error {
+	glog.V(1).Infof("Unsetting pool %v", r.pool)
+	r.pool.Free()
+	r.pool = nil
+
+	for _, file := range r.files {
+		if file.vol != nil {
+			file.vol.Free()
+			file.vol = nil
+		}
+	}
+
+	r.resource.Status.Phase = apiv1.VirtimagerepoOffline
+
+	if err := r.saveRepo(); err != nil {
+		return err
+	}
 	return nil
 }
