@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
@@ -114,23 +115,43 @@ type TPRClient struct {
 	Rest         *rest.RESTClient
 }
 
-func (c *TPRClient) Get(name string) rest.Result {
+func (c *TPRClient) Get(name string, obj runtime.Object) error {
+	var res rest.Result
 	if name == "" {
-		return c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Do()
+		res = c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Do()
 	} else {
-		return c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do()
+		res = c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do()
 	}
+	if err := res.Error(); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("Resource type '%s' name '%s/%s' was not found", c.ResourceName, c.Namespace, name)
+		}
+		return err
+	}
+	return res.Into(obj)
 }
 
-func (c *TPRClient) Put(name string, obj runtime.Object) rest.Result {
+func (c *TPRClient) Put(name string, obj runtime.Object) error {
 	// TODO: pulling 'name' out of 'obj' would be nice
-	return c.Rest.Put().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Body(obj).Do()
+	res := c.Rest.Put().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Body(obj).Do()
+	if err := res.Error(); err != nil {
+		return err
+	}
+	return res.Into(obj)
 }
 
-func (c *TPRClient) Post(obj runtime.Object) rest.Result {
-	return c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Body(obj).Do()
+func (c *TPRClient) Post(obj runtime.Object) error {
+	res := c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Body(obj).Do()
+	if err := res.Error(); err != nil {
+		return err
+	}
+	return res.Into(obj)
 }
 
-func (c *TPRClient) Delete(name string) rest.Result {
-	return c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do()
+func (c *TPRClient) Delete(name string) error {
+	return c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Do().Error()
+}
+
+func (c *TPRClient) Watch() (watch.Interface, error) {
+	return c.Rest.Get().Prefix("watch").Resource(c.ResourceName).Namespace(c.Namespace).Watch()
 }

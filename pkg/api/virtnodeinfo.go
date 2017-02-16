@@ -1,6 +1,7 @@
 package api
 
 import (
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -36,36 +37,42 @@ func NewVirtnodeinfoClient(namespace string, kubeconfig *rest.Config) (*Virtnode
 	}, nil
 }
 
-func (c *VirtnodeinfoClient) decode(res rest.Result) (*apiv1.Virtnode, error) {
-	if err := res.Error(); err != nil {
+func (c *VirtnodeinfoClient) List() (*apiv1.VirtnodeList, error) {
+	var obj apiv1.VirtnodeList
+	if err := c.tpr.Get("", &obj); err != nil {
 		return nil, err
 	}
-
-	var obj apiv1.Virtnode
-	res.Into(&obj)
 	return &obj, nil
+}
 
+func (c *VirtnodeinfoClient) Watch() (watch.Interface, error) {
+	return c.tpr.Watch()
 }
 
 func (c *VirtnodeinfoClient) Get(name string) (*apiv1.Virtnode, error) {
-	res := c.tpr.Get(name)
-	return c.decode(res)
+	var obj apiv1.Virtnode
+	if err := c.tpr.Get(name, &obj); err != nil {
+		return nil, err
+	}
+	return &obj, nil
 }
 
 func (c *VirtnodeinfoClient) Create(obj *apiv1.Virtnode) (*apiv1.Virtnode, error) {
-	res := c.tpr.Post(obj)
-	return c.decode(res)
+	var newobj apiv1.Virtnode = *obj
+	if err := c.tpr.Post(&newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtnodeinfoClient) Update(obj *apiv1.Virtnode) (*apiv1.Virtnode, error) {
-	res := c.tpr.Put(obj.Metadata.Name, obj)
-	return c.decode(res)
+	var newobj apiv1.Virtnode = *obj
+	if err := c.tpr.Put(obj.Metadata.Name, &newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtnodeinfoClient) Delete(obj *apiv1.Virtnode) error {
-	res := c.tpr.Delete(obj.Metadata.Name)
-	if err := res.Error(); err != nil {
-		return err
-	}
-	return nil
+	return c.tpr.Delete(obj.Metadata.Name)
 }

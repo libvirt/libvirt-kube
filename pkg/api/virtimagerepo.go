@@ -1,6 +1,7 @@
 package api
 
 import (
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -36,36 +37,42 @@ func NewVirtimagerepoClient(namespace string, kubeconfig *rest.Config) (*Virtima
 	}, nil
 }
 
-func (c *VirtimagerepoClient) decode(res rest.Result) (*apiv1.Virtimagerepo, error) {
-	if err := res.Error(); err != nil {
+func (c *VirtimagerepoClient) List() (*apiv1.VirtimagerepoList, error) {
+	var obj apiv1.VirtimagerepoList
+	if err := c.tpr.Get("", &obj); err != nil {
 		return nil, err
 	}
-
-	var obj apiv1.Virtimagerepo
-	res.Into(&obj)
 	return &obj, nil
+}
 
+func (c *VirtimagerepoClient) Watch() (watch.Interface, error) {
+	return c.tpr.Watch()
 }
 
 func (c *VirtimagerepoClient) Get(name string) (*apiv1.Virtimagerepo, error) {
-	res := c.tpr.Get(name)
-	return c.decode(res)
+	var obj apiv1.Virtimagerepo
+	if err := c.tpr.Get(name, &obj); err != nil {
+		return nil, err
+	}
+	return &obj, nil
 }
 
 func (c *VirtimagerepoClient) Create(obj *apiv1.Virtimagerepo) (*apiv1.Virtimagerepo, error) {
-	res := c.tpr.Post(obj)
-	return c.decode(res)
+	var newobj apiv1.Virtimagerepo = *obj
+	if err := c.tpr.Post(&newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtimagerepoClient) Update(obj *apiv1.Virtimagerepo) (*apiv1.Virtimagerepo, error) {
-	res := c.tpr.Put(obj.Metadata.Name, obj)
-	return c.decode(res)
+	var newobj apiv1.Virtimagerepo = *obj
+	if err := c.tpr.Put(obj.Metadata.Name, &newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtimagerepoClient) Delete(obj *apiv1.Virtimagerepo) error {
-	res := c.tpr.Delete(obj.Metadata.Name)
-	if err := res.Error(); err != nil {
-		return err
-	}
-	return nil
+	return c.tpr.Delete(obj.Metadata.Name)
 }

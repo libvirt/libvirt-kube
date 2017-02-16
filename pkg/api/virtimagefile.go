@@ -1,6 +1,7 @@
 package api
 
 import (
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -36,47 +37,42 @@ func NewVirtimagefileClient(namespace string, kubeconfig *rest.Config) (*Virtima
 	}, nil
 }
 
-func (c *VirtimagefileClient) decode(res rest.Result) (*apiv1.Virtimagefile, error) {
-	if err := res.Error(); err != nil {
+func (c *VirtimagefileClient) List() (*apiv1.VirtimagefileList, error) {
+	var obj apiv1.VirtimagefileList
+	if err := c.tpr.Get("", &obj); err != nil {
 		return nil, err
 	}
-
-	var obj apiv1.Virtimagefile
-	res.Into(&obj)
 	return &obj, nil
 }
 
-func (c *VirtimagefileClient) List() (*apiv1.VirtimagefileList, error) {
-	res := c.tpr.Get("")
-
-	if err := res.Error(); err != nil {
-		return nil, err
-	}
-
-	var obj apiv1.VirtimagefileList
-	res.Into(&obj)
-	return &obj, nil
+func (c *VirtimagefileClient) Watch() (watch.Interface, error) {
+	return c.tpr.Watch()
 }
 
 func (c *VirtimagefileClient) Get(name string) (*apiv1.Virtimagefile, error) {
-	res := c.tpr.Get(name)
-	return c.decode(res)
+	var obj apiv1.Virtimagefile
+	if err := c.tpr.Get(name, &obj); err != nil {
+		return nil, err
+	}
+	return &obj, nil
 }
 
 func (c *VirtimagefileClient) Create(obj *apiv1.Virtimagefile) (*apiv1.Virtimagefile, error) {
-	res := c.tpr.Post(obj)
-	return c.decode(res)
+	var newobj apiv1.Virtimagefile = *obj
+	if err := c.tpr.Post(&newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtimagefileClient) Update(obj *apiv1.Virtimagefile) (*apiv1.Virtimagefile, error) {
-	res := c.tpr.Put(obj.Metadata.Name, obj)
-	return c.decode(res)
+	var newobj apiv1.Virtimagefile = *obj
+	if err := c.tpr.Put(obj.Metadata.Name, &newobj); err != nil {
+		return nil, err
+	}
+	return &newobj, nil
 }
 
 func (c *VirtimagefileClient) Delete(obj *apiv1.Virtimagefile) error {
-	res := c.tpr.Delete(obj.Metadata.Name)
-	if err := res.Error(); err != nil {
-		return err
-	}
-	return nil
+	return c.tpr.Delete(obj.Metadata.Name)
 }
