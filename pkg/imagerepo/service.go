@@ -20,21 +20,25 @@
 package imagerepo
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"libvirt.org/libvirt-kube/pkg/api"
+	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/libvirtutil"
 )
 
 type Service struct {
 	poolManager *PoolManager
+	fileMonitor watch.Interface
 	conn        *libvirt.Connect
 	connNotify  chan libvirtutil.ConnectEvent
 	clientset   *kubernetes.Clientset
@@ -84,10 +88,16 @@ func NewService(libvirtURI string, kubeconfigfile string, reponame string, repop
 		return nil, err
 	}
 
+	fileMonitor, err := imagefileclient.Watch()
+	if err != nil {
+		return nil, err
+	}
+
 	glog.V(1).Infof("Got repo %s", imagerepo)
 
 	svc := &Service{
 		poolManager: NewPoolManager(reponame, repopath),
+		fileMonitor: fileMonitor,
 		connNotify:  make(chan libvirtutil.ConnectEvent, 1),
 		clientset:   clientset,
 		repo:        CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
@@ -144,6 +154,27 @@ func (s *Service) Run() error {
 				}
 			}
 			pool.Free()
+		case objEvent := <-s.fileMonitor.ResultChan():
+			if objEvent.Type == watch.Error {
+				glog.V(1).Infof("Got file error %s", objEvent.Object)
+				continue
+			}
+			glog.V(1).Infof("Object %s %s", objEvent.Type, objEvent.Object)
+
+			imagefile, ok := objEvent.Object.(*apiv1.Virtimagefile)
+			if !ok {
+				glog.V(1).Infof("Object wasn't virtimagefile %s", objEvent.Object, reflect.TypeOf(objEvent.Object))
+				continue
+			}
+			glog.V(1).Infof("Object %s %s", objEvent.Type, imagefile.Metadata.Name)
+			switch objEvent.Type {
+			case watch.Added:
+				s.repo.AddFile(imagefile)
+			case watch.Modified:
+				s.repo.ModifyFile(imagefile)
+			case watch.Deleted:
+				s.repo.DeleteFile(imagefile)
+			}
 		case <-ticker.C:
 			glog.V(1).Info("Updating repo")
 			s.repo.Refresh()

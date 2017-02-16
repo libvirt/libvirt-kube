@@ -54,8 +54,9 @@ type RepositoryJobDelete struct {
 }
 
 type RepositoryJobResize struct {
-	vol  *libvirt.StorageVol
-	size uint64
+	vol      *libvirt.StorageVol
+	size     uint64
+	allocate bool
 }
 
 type RepositoryJob interface {
@@ -161,6 +162,22 @@ func (j *RepositoryJobCreate) Finish(r *Repository) error {
 	return nil
 }
 
+func (j *RepositoryJobResize) Process() error {
+	glog.V(1).Infof("Job resize %s", j.vol)
+
+	flags := libvirt.STORAGE_VOL_RESIZE_SHRINK
+	if j.allocate {
+		flags |= libvirt.STORAGE_VOL_RESIZE_ALLOCATE
+	}
+	err := j.vol.Resize(j.size, flags)
+	j.vol.Free()
+	return err
+}
+
+func (j *RepositoryJobResize) Finish(r *Repository) error {
+	return nil
+}
+
 func (j *RepositoryJobDelete) Process() error {
 	glog.V(1).Infof("Job delete %s", j.vol)
 
@@ -218,6 +235,14 @@ func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.Virti
 	}
 }
 
+func (r *Repository) volRepoMatches(file *apiv1.Virtimagefile) bool {
+	if file.Spec.RepoName != r.resource.Metadata.Name {
+		glog.V(1).Infof("Ignoring vol '%s' for repo '%s'", file.Metadata.Name, file.Spec.RepoName)
+		return false
+	}
+	return true
+}
+
 func (r *Repository) loadFileResources() error {
 	files, err := r.fileclient.List()
 	if err != nil {
@@ -227,6 +252,9 @@ func (r *Repository) loadFileResources() error {
 	r.files = make(map[string]*RepositoryFile)
 
 	for _, file := range files.Items {
+		if !r.volRepoMatches(file) {
+			continue
+		}
 		name := makeVolName(file.Metadata.Name, r.resource.Spec.Format)
 
 		glog.V(1).Infof("Loaded file resource %s (%s)", file, file.Metadata.Name)
@@ -236,6 +264,32 @@ func (r *Repository) loadFileResources() error {
 	}
 
 	return nil
+}
+
+func (r *Repository) createFileVolume(name string) {
+	file := r.files[name]
+	file.resource.Status.Phase = apiv1.VirtimagefilePending
+	r.pool.Ref()
+	job := &RepositoryJobCreate{
+		file:     file,
+		pool:     r.pool,
+		name:     name,
+		capacity: file.resource.Spec.Capacity,
+		format:   r.resource.Spec.Format,
+	}
+	if r.resource.Spec.Preallocate {
+		job.allocation = job.capacity
+	}
+
+	glog.V(1).Infof("Queueing create for %s", name)
+	r.pendingJobs <- job
+
+	obj, err := r.fileclient.Update(file.resource)
+	if err != nil {
+		glog.V(1).Infof("Unable to update file status %s", err)
+		return
+	}
+	file.resource = obj
 }
 
 func (r *Repository) loadVolumes() error {
@@ -265,30 +319,18 @@ func (r *Repository) loadVolumes() error {
 			delete(volNames, name)
 			file.vol = vol
 			file.resource.Status.Phase = apiv1.VirtimagefileAvailable
+
+			// XXX might need to resize the vol
+
+			obj, err := r.fileclient.Update(file.resource)
+			if err != nil {
+				glog.V(1).Infof("Unable to update file status %s", err)
+				continue
+			}
+			file.resource = obj
 		} else {
-			file.resource.Status.Phase = apiv1.VirtimagefilePending
-			r.pool.Ref()
-			job := &RepositoryJobCreate{
-				file:     file,
-				pool:     r.pool,
-				name:     name,
-				capacity: file.resource.Spec.Capacity,
-				format:   r.resource.Spec.Format,
-			}
-			if r.resource.Spec.Preallocate {
-				job.allocation = job.capacity
-			}
-
-			glog.V(1).Infof("Queueing create for %s", name)
-			r.pendingJobs <- job
+			r.createFileVolume(name)
 		}
-
-		obj, err := r.fileclient.Update(file.resource)
-		if err != nil {
-			glog.V(1).Infof("Unable to update file status %s", err)
-			continue
-		}
-		file.resource = obj
 	}
 
 	for name, vol := range volNames {
@@ -371,6 +413,7 @@ func (r *Repository) saveRepo() error {
 		return err
 	}
 
+	glog.V(1).Infof("Repo origianalk %s %d", r.resource, r.resource.Metadata.ResourceVersion)
 	r.resource = obj
 
 	glog.V(1).Infof("Repo Result %s %d", obj, obj.Metadata.ResourceVersion)
@@ -395,6 +438,7 @@ func (r *Repository) Refresh() error {
 
 	err := r.refreshSizes()
 	if err != nil {
+		glog.V(1).Infof("Failed refreshing sizes %s", err)
 		r.resource.Status.Phase = apiv1.VirtimagerepoFailed
 	} else {
 		r.resource.Status.Phase = apiv1.VirtimagerepoReady
@@ -414,6 +458,7 @@ func (r *Repository) SetPool(pool *libvirt.StoragePool) error {
 
 	err := r.loadVolumes()
 	if err != nil {
+		glog.V(1).Infof("Failed loading volumes %s", err)
 		r.resource.Status.Phase = apiv1.VirtimagerepoFailed
 	} else {
 		r.resource.Status.Phase = apiv1.VirtimagerepoReady
@@ -443,4 +488,82 @@ func (r *Repository) UnsetPool() error {
 		return err
 	}
 	return nil
+}
+
+func (r *Repository) AddFile(file *apiv1.Virtimagefile) {
+	if !r.volRepoMatches(file) {
+		return
+	}
+
+	name := makeVolName(file.Metadata.Name, r.resource.Spec.Format)
+
+	_, ok := r.files[name]
+
+	if ok {
+		return
+	}
+
+	r.files[name] = &RepositoryFile{
+		resource: file,
+	}
+
+	r.createFileVolume(name)
+}
+
+func (r *Repository) ModifyFile(file *apiv1.Virtimagefile) {
+	if !r.volRepoMatches(file) {
+		return
+	}
+
+	name := makeVolName(file.Metadata.Name, r.resource.Spec.Format)
+
+	fileState, ok := r.files[name]
+
+	if !ok {
+		return
+	}
+
+	if file.Metadata.ResourceVersion == fileState.resource.Metadata.ResourceVersion {
+		glog.V(1).Infof("Version did not change, ignoring modify")
+		return
+	}
+
+	if file.Spec.Capacity != fileState.resource.Spec.Capacity {
+		glog.V(1).Infof("Queue resize for %s %v", name, fileState.vol)
+		fileState.vol.Ref()
+		job := &RepositoryJobResize{
+			vol:  fileState.vol,
+			size: file.Spec.Capacity,
+		}
+		if r.resource.Spec.Preallocate {
+			job.allocate = true
+		}
+		r.pendingJobs <- job
+	}
+
+	fileState.resource = file
+}
+
+func (r *Repository) DeleteFile(file *apiv1.Virtimagefile) {
+	if !r.volRepoMatches(file) {
+		return
+	}
+
+	name := makeVolName(file.Metadata.Name, r.resource.Spec.Format)
+
+	fileState, ok := r.files[name]
+
+	if !ok {
+		return
+	}
+
+	if fileState.vol != nil {
+		glog.V(1).Infof("Queue delete for %s %v", name, fileState.vol)
+		job := &RepositoryJobDelete{
+			vol: fileState.vol,
+		}
+		r.pendingJobs <- job
+		fileState.vol = nil
+	}
+	delete(r.files, name)
 }
