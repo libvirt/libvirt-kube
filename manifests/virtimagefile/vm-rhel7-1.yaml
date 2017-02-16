@@ -1,8 +1,8 @@
 apiVersion: libvirt.org/v1alpha1
 kind: Virtimagefile
 metadata:
-  name: vol2
+  name: vm-rhel7-1
 spec:
-  repoName: default
+  repoName: host-localhost
   accessMode: ReadWriteOnce
   capacity: 10485760

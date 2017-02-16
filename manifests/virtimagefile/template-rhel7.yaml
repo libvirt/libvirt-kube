@@ -1,8 +1,8 @@
 apiVersion: libvirt.org/v1alpha1
 kind: Virtimagefile
 metadata:
-  name: vol1
+  name: template-rhel7
 spec:
-  repoName: default
+  repoName: shared-images
   accessMode: ReadWriteOnce
   capacity: 10485760

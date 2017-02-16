@@ -1,0 +1,12 @@
+# A pool that is private to a particular host
+apiVersion: libvirt.org/v1alpha1
+kind: Virtimagerepo
+metadata:
+  name: host-localhost
+spec:
+  # Would make to an block device backed
+  # persistent volume claimed to be formated and mounted
+  # on a particular host - 'localhost' to be replaced
+  # with actual hostname, here and above.
+  claimName: imagerepo-host-localhost
+  format: qcow2

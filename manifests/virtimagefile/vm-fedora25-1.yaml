@@ -1,0 +1,8 @@
+apiVersion: libvirt.org/v1alpha1
+kind: Virtimagefile
+metadata:
+  name: vm-fedora25-1
+spec:
+  repoName: host-localhost
+  accessMode: ReadWriteOnce
+  capacity: 10485760
