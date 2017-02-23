@@ -1,0 +1,126 @@
+    Libvirt Kubelet Storage
+    =======================
+
+There are three coarse types of backend that QEMU can consume storage
+from
+
+ - Block devices - eg LVM vols, SCSI luns, etc
+ - Image files - eg raw, qcow2, either on local filesystem (ext4/xfs)
+   or a network/cluster filessytem (nfs/ceph/gluster)
+ - Network volumes - eg ISCSI, RBD, NBD
+
+
+In K8s the storage model is slightly different
+
+  - Persistent volume - an allocated block of storage. This may be
+    a block device or a filesystem, both either local or networked
+
+  - Persistent volume claim - an claim to use a Persisten volume.
+    Holding a claim may lock out other users if the sharing type
+    is for exclusive access
+
+  - Storage classes - a pool from which persistent volumes are
+    dynamically provisioned
+
+When defining a POD, there are zero or more volumes defined. The
+volumes can directly refence an allocated block of storage by
+providing full configuration info, or can access a persistent
+volume claim by name, and thus indirectly a persistent volume.
+
+Whether the storage referenced is providing a block device or
+filesystem, inside a container, the result is always a filesystem
+mount. There is (currently) no way to provide a block device to
+a container.  kubelet will automatically format a filesystem on
+the block device if it does not already contain one.
+
+With the way VMs are managed in k8s, there is one pod running
+libvirtd and associated daemons, and then zero or more pods
+each running a single VM.
+
+A container in k8s comprises a cgroup to hold all the processes
+against which resource requests are enforced, along with one or
+private kernel namespaces. The mount namespace is (currently)
+always private. Other namespaces may be set to inherit from the
+host.
+
+The libvirtd process is responsible for launching QEMU, and
+it thus QEMU will share the namespaces of the libvirtd container,
+*not* the VM container. Libvirtd will place the QEMU process in
+the VM container cgroups. So in a sense, the QEMU process lives
+in a hybrid state, being partially associated with two PODs.
+
+The implication of this for storage is that volumes made available
+to the VM pod cannot be used for VM storage. Libvirtd is in a
+different mount namespace, and thus the filesystems mounted in
+the VM pod are invisible.
+
+There are two ways to deal with this
+
+ - If a QEMU process uses a network block backend, then the
+   storage never needs to be visible to the host OS, and thus
+   the question of mount namespaces never arises.
+
+ - If a QEMU process needs to use file based storage, that
+   storage must be associated with the libvirtd POD, not
+   the VM POD.
+
+The latter restriction likely isn't as bad a limitation as it
+might first look like. If managing VM disks with file based
+storage, there is quite likely to be small finite number of
+filesystem instances holding the images. This means it is
+feasible to configure the libvirtd POD to mount this storage
+when first deploying libvirtd onto a host.
+
+If k8s gains ability to dynamically add further volume mounts
+to a running POD, this would allow live additions with no
+downtime. Even without this facility, however, it should be
+possible to restart the libvirtd POD without interrupting
+guests to add more storage mounts.
+
+There will thus be the following modelling
+
+ - A virtual machine disk config can take two
+   forms
+
+     - A reference to a persistent volume claim
+     - A refernce to an "image file" resource
+
+ - A "image repository" third party resource will
+   be defined, referencing a persistent volume claim.
+
+ - The image repository persistent volume claim will
+   be mounted in the libvirtd PODs
+
+ - A "image file" third party resource will be defined
+   which represents a single image within a repository.
+
+ - An image repository manager daemon will be associated
+   with an image repository TPR. It will monitor for
+   image file TPRs that reference the image repository
+
+ - The image repository manager daemon will create a
+   libvirt storage pool against the image repository
+   persistent volume mount in libvirtd POD. It will
+   then create/delete storage volumes to correspond
+   with the image file TPR changes
+
+In this model, libvirtd POD is the only one that needs
+to see the volume mount that holds the image files.
+Other pods all use libvirt APIs to perform work, delegating
+it to libvirtd for execution.
+
+The main configuration gap this leaves is the ability to
+handle local block storage. Even if k8s is changed so that
+it can expose a block device to a continer, instead of
+formatting an mounting a filesystem, this won't mesh well
+with the model above. The model above only works, because
+you can have a single PVC mounted as a filesystem in
+the libvirtd POD which holds images for all VMs. If PVC
+is to be used to correspond to a single VM, then it creates
+a need for a highly dynamic configuration. It is not possible
+to simply associate the PVC against the VM POD, since that
+is a separate namespace, and associating PVCs for 100's
+of VMs against the libvirtd POD requires highly dynamic
+storage re-configuration for PODs. It would not be practical
+to restart the libvirtd POD every time a new PVC needs to
+be exposed as a block device.
