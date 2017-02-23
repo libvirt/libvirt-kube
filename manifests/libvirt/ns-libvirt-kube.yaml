@@ -1,0 +1,6 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: libvirt-kube
+  labels:
+    name: libvirt-kube

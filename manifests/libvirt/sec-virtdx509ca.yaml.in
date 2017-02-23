@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: virtdx509ca
+  namespace: libvirt-kube
+type: Opaque
+data:
