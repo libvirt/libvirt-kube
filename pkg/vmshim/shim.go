@@ -30,21 +30,26 @@ import (
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/client-go/kubernetes"
+	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/designer"
 	"libvirt.org/libvirt-kube/pkg/resource"
 )
 
 type Shim struct {
-	clientset  *kubernetes.Clientset
-	template   *apiv1.VirttemplateSpec
-	hypervisor *libvirt.Connect
-	domain     *libvirt.Domain
-	shutdown   chan bool
-	sighandler chan os.Signal
+	clientset       *kubernetes.Clientset
+	imageRepoPath   string
+	imageRepoClient *api.VirtimagerepoClient
+	imageFileClient *api.VirtimagefileClient
+	template        *apiv1.VirttemplateSpec
+	hypervisor      *libvirt.Connect
+	domain          *libvirt.Domain
+	shutdown        chan bool
+	sighandler      chan os.Signal
 }
 
 func runEventLoop() {
@@ -65,13 +70,23 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func NewShim(templateFile string, libvirtURI string, kubeconfigfile string) (*Shim, error) {
+func NewShim(templateFile string, libvirtURI string, imageRepoPath string, kubeconfigfile string) (*Shim, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	imageRepoClient, err := api.NewVirtimagerepoClient(kubeapi.NamespaceDefault, kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	imageFileClient, err := api.NewVirtimagefileClient(kubeapi.NamespaceDefault, kubeconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +108,14 @@ func NewShim(templateFile string, libvirtURI string, kubeconfigfile string) (*Sh
 	}
 
 	shim := &Shim{
-		clientset:  clientset,
-		template:   template,
-		hypervisor: hypervisor,
-		shutdown:   make(chan bool, 1),
-		sighandler: make(chan os.Signal, 1),
+		clientset:       clientset,
+		imageRepoPath:   imageRepoPath,
+		imageFileClient: imageFileClient,
+		imageRepoClient: imageRepoClient,
+		template:        template,
+		hypervisor:      hypervisor,
+		shutdown:        make(chan bool, 1),
+		sighandler:      make(chan os.Signal, 1),
 	}
 
 	signal.Notify(shim.sighandler, syscall.SIGHUP)
@@ -121,7 +139,7 @@ func (s *Shim) Run() error {
 	}
 	glog.V(1).Infof("Using partition %s", partition)
 
-	domdesign := designer.NewDomainDesigner(s.clientset)
+	domdesign := designer.NewDomainDesigner(s.clientset, s.imageRepoPath, s.imageRepoClient, s.imageFileClient)
 	if partition != "" {
 		domdesign.SetResourcePartition(partition)
 	}
@@ -165,7 +183,7 @@ func (s *Shim) Run() error {
 	if err != nil {
 		return err
 	}
-	glog.V(1).Infof("Creating domain %s", cfg.UUID)
+	glog.V(1).Infof("Creating domain %s: %s", cfg.UUID, cfgXML)
 	s.domain, err = s.hypervisor.DomainCreateXML(cfgXML,
 		libvirt.DOMAIN_START_AUTODESTROY|libvirt.DOMAIN_START_VALIDATE)
 	if err != nil {

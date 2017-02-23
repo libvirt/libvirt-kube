@@ -58,6 +58,7 @@ type VirttemplateSpec struct {
 
 type VirttemplateStorage struct {
 	PersistentVolume *VirttemplateStoragePersistentVolume `json:"persistentVolume"`
+	ImageFile        *VirttemplateStorageImageFile        `json:"imageFile"`
 }
 
 // The guest will be directly connected to the raw persistent storage
@@ -65,6 +66,13 @@ type VirttemplateStorage struct {
 // protocol refered to.
 type VirttemplateStoragePersistentVolume struct {
 	ClaimName string `json:"claimName"`
+}
+
+// The guest will use a local image file associated with resource
+// whose k8s name is 'FileName' - nb this is *not* file path on
+// disk - this is the TPR resource name
+type VirttemplateStorageImageFile struct {
+	FileName string `json:"fileName"`
 }
 
 type VirttemplateBoot struct {

@@ -25,12 +25,17 @@ topology:
   threads: 1
 devices: 
   disk: 
-    - 
-      bootindex: 1
+#    -
+#      bootindex: 1
+#      device: disk
+#      encrypt:
+#        luks:
+#          passphrase: 123456
+#      source:
+#        persistentVolume:
+#          claimName: pvc-rbd1
+    -
       device: disk
-      encrypt: 
-        luks: 
-          passphrase: 123456
       source:
-        persistentVolume:
-          claimName: pvc-rbd1
+        imageFile:
+          fileName: template-fedora25

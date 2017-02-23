@@ -35,6 +35,7 @@ var (
 	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
 	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
+	repopath   = pflag.String("repopath", "/srv/images", "Path to image repository mount point")
 )
 
 func main() {
@@ -43,7 +44,7 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := vmshim.NewShim(*config, *connect, *kubeconfig)
+	svc, err := vmshim.NewShim(*config, *connect, *repopath, *kubeconfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

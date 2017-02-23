@@ -3,6 +3,8 @@ package designer
 import (
 	"fmt"
 	"net"
+	"path"
+	"regexp"
 
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go-xml"
@@ -21,17 +23,23 @@ type DomainDesignerSecret struct {
 }
 
 type DomainDesigner struct {
-	clientset *kubernetes.Clientset
-	Domain    *libvirtxml.Domain
-	Secrets   []DomainDesignerSecret
+	clientset       *kubernetes.Clientset
+	imageRepoPath   string
+	imageRepoClient *api.VirtimagerepoClient
+	imageFileClient *api.VirtimagefileClient
+	Domain          *libvirtxml.Domain
+	Secrets         []DomainDesignerSecret
 }
 
-func NewDomainDesigner(clientset *kubernetes.Clientset) *DomainDesigner {
+func NewDomainDesigner(clientset *kubernetes.Clientset, imageRepoPath string, imageRepoClient *api.VirtimagerepoClient, imageFileClient *api.VirtimagefileClient) *DomainDesigner {
 	uuid := uuid.NewV4().String()
 	name := fmt.Sprintf("kube-%s", uuid)
 
 	return &DomainDesigner{
-		clientset: clientset,
+		clientset:       clientset,
+		imageRepoPath:   imageRepoPath,
+		imageRepoClient: imageRepoClient,
+		imageFileClient: imageFileClient,
 		Domain: &libvirtxml.Domain{
 			UUID: uuid,
 			Name: name,
@@ -218,36 +226,83 @@ func (d *DomainDesigner) setDiskConfigISCSI(src *kubeapiv1.ISCSIVolumeSource, di
 			Port:      port,
 		})
 
-	disk.Target = &libvirtxml.DomainDiskTarget{
-		Dev: "vda",
-		Bus: "virtio",
-	}
-
 	return nil
 }
 
-func (d *DomainDesigner) setDiskConfig(tmpl *apiv1.VirttemplateSpec, disk *apiv1.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
-	pvname, pvspec, err := api.GetVolumeSpec(d.clientset, disk.Source.PersistentVolume.ClaimName, kubeapi.NamespaceDefault)
+func (d *DomainDesigner) setDiskConfigPersistentVolume(pv *apiv1.VirttemplateStoragePersistentVolume, diskConfig *libvirtxml.DomainDisk) error {
+	pvname, pvspec, err := api.GetVolumeSpec(d.clientset, pv.ClaimName, kubeapi.NamespaceDefault)
 	if err != nil {
 		return err
-	}
-
-	diskConfig := libvirtxml.DomainDisk{
-		Device: disk.Device,
 	}
 
 	src := pvspec.PersistentVolumeSource
 
 	if src.RBD != nil {
-		err = d.setDiskConfigRBD(src.RBD, &diskConfig)
+		return d.setDiskConfigRBD(src.RBD, diskConfig)
 	} else if src.ISCSI != nil {
-		err = d.setDiskConfigISCSI(src.ISCSI, &diskConfig)
+		return d.setDiskConfigISCSI(src.ISCSI, diskConfig)
 	} else {
-		err = fmt.Errorf("Unsupported persistent volume source on %s", pvname)
+		return fmt.Errorf("Unsupported persistent volume source on %s", pvname)
 	}
+}
+
+func escapeObjname(path string) string {
+	re := regexp.MustCompile("[^a-zA-Z0-9_-]")
+	return re.ReplaceAllLiteralString(path, "_")
+}
+func makeVolName(path, format string) string {
+	base := escapeObjname(path)
+	return fmt.Sprintf("%s.%s", base, format)
+}
+
+func (d *DomainDesigner) setDiskConfigImageFile(storage *apiv1.VirttemplateStorageImageFile, diskConfig *libvirtxml.DomainDisk) error {
+	imagefile, err := d.imageFileClient.Get(storage.FileName)
 	if err != nil {
-		glog.V(1).Infof("Failed to setup disk %s", err)
 		return err
+	}
+
+	imagerepo, err := d.imageRepoClient.Get(imagefile.Spec.RepoName)
+	if err != nil {
+		return err
+	}
+
+	path := path.Join(d.imageRepoPath, imagerepo.Metadata.Name, makeVolName(imagefile.Metadata.Name, imagerepo.Spec.Format))
+	glog.V(1).Infof("Disk image file %s -> repo %s ->path %s", storage.FileName, imagerepo.Metadata.Name, path)
+
+	diskConfig.Type = "file"
+	diskConfig.Source = &libvirtxml.DomainDiskSource{
+		File: path,
+	}
+	diskConfig.Driver = &libvirtxml.DomainDiskDriver{
+		Name: "qemu",
+		Type: imagerepo.Spec.Format,
+	}
+
+	return nil
+}
+
+func (d *DomainDesigner) setDiskConfig(disk *apiv1.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
+	diskConfig := libvirtxml.DomainDisk{
+		Device: disk.Device,
+	}
+
+	if disk.Source.PersistentVolume != nil {
+		if err := d.setDiskConfigPersistentVolume(disk.Source.PersistentVolume, &diskConfig); err != nil {
+			return err
+		}
+	} else if disk.Source.ImageFile != nil {
+		if err := d.setDiskConfigImageFile(disk.Source.ImageFile, &diskConfig); err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("Missing persistentVolume/imageFile info in disk source")
+	}
+
+	devname := fmt.Sprintf("vd%c", int('a')+len(devs.Disks))
+
+	diskConfig.Target = &libvirtxml.DomainDiskTarget{
+		Dev: devname,
+		Bus: "virtio",
 	}
 
 	devs.Disks = append(devs.Disks, diskConfig)
@@ -259,7 +314,7 @@ func (d *DomainDesigner) setDeviceConfig(tmpl *apiv1.VirttemplateSpec) error {
 	d.Domain.Devices = &libvirtxml.DomainDeviceList{}
 
 	for _, disk := range tmpl.Devices.Disks {
-		if err := d.setDiskConfig(tmpl, disk, d.Domain.Devices); err != nil {
+		if err := d.setDiskConfig(disk, d.Domain.Devices); err != nil {
 			return err
 		}
 	}
