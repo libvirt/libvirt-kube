@@ -115,7 +115,28 @@ type TPRClient struct {
 	Rest         *rest.RESTClient
 }
 
-func (c *TPRClient) Get(name string, obj runtime.Object) error {
+type TPRObject interface {
+	runtime.Object
+	v1.ObjectMetaAccessor
+}
+
+type TPRObjectList interface {
+	runtime.Object
+	v1.ListMetaAccessor
+}
+
+func (c *TPRClient) List(obj TPRObjectList) error {
+	res := c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Do()
+	if err := res.Error(); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("Resource type '%s' name '%s' was not found", c.ResourceName, c.Namespace)
+		}
+		return err
+	}
+	return res.Into(obj)
+}
+
+func (c *TPRClient) Get(name string, obj TPRObject) error {
 	var res rest.Result
 	if name == "" {
 		res = c.Rest.Get().Resource(c.ResourceName).Namespace(c.Namespace).Do()
@@ -131,8 +152,8 @@ func (c *TPRClient) Get(name string, obj runtime.Object) error {
 	return res.Into(obj)
 }
 
-func (c *TPRClient) Put(name string, obj runtime.Object) error {
-	// TODO: pulling 'name' out of 'obj' would be nice
+func (c *TPRClient) Put(obj TPRObject) error {
+	name := obj.GetObjectMeta().GetName()
 	res := c.Rest.Put().Resource(c.ResourceName).Namespace(c.Namespace).Name(name).Body(obj).Do()
 	if err := res.Error(); err != nil {
 		return err
@@ -140,7 +161,7 @@ func (c *TPRClient) Put(name string, obj runtime.Object) error {
 	return res.Into(obj)
 }
 
-func (c *TPRClient) Post(obj runtime.Object) error {
+func (c *TPRClient) Post(obj TPRObject) error {
 	res := c.Rest.Post().Resource(c.ResourceName).Namespace(c.Namespace).Body(obj).Do()
 	if err := res.Error(); err != nil {
 		return err

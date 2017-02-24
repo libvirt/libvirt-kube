@@ -39,7 +39,7 @@ func NewVirtimagefileClient(namespace string, kubeconfig *rest.Config) (*Virtima
 
 func (c *VirtimagefileClient) List() (*apiv1.VirtimagefileList, error) {
 	var obj apiv1.VirtimagefileList
-	if err := c.tpr.Get("", &obj); err != nil {
+	if err := c.tpr.List(&obj); err != nil {
 		return nil, err
 	}
 	return &obj, nil
@@ -67,7 +67,7 @@ func (c *VirtimagefileClient) Create(obj *apiv1.Virtimagefile) (*apiv1.Virtimage
 
 func (c *VirtimagefileClient) Update(obj *apiv1.Virtimagefile) (*apiv1.Virtimagefile, error) {
 	var newobj apiv1.Virtimagefile = *obj
-	if err := c.tpr.Put(obj.Metadata.Name, &newobj); err != nil {
+	if err := c.tpr.Put(&newobj); err != nil {
 		return nil, err
 	}
 	return &newobj, nil

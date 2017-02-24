@@ -39,7 +39,7 @@ func NewVirtnodeinfoClient(namespace string, kubeconfig *rest.Config) (*Virtnode
 
 func (c *VirtnodeinfoClient) List() (*apiv1.VirtnodeList, error) {
 	var obj apiv1.VirtnodeList
-	if err := c.tpr.Get("", &obj); err != nil {
+	if err := c.tpr.List(&obj); err != nil {
 		return nil, err
 	}
 	return &obj, nil
@@ -67,7 +67,7 @@ func (c *VirtnodeinfoClient) Create(obj *apiv1.Virtnode) (*apiv1.Virtnode, error
 
 func (c *VirtnodeinfoClient) Update(obj *apiv1.Virtnode) (*apiv1.Virtnode, error) {
 	var newobj apiv1.Virtnode = *obj
-	if err := c.tpr.Put(obj.Metadata.Name, &newobj); err != nil {
+	if err := c.tpr.Put(&newobj); err != nil {
 		return nil, err
 	}
 	return &newobj, nil
