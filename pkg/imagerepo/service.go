@@ -20,6 +20,10 @@
 package imagerepo
 
 import (
+	"crypto/tls"
+	"fmt"
+	"io"
+	"net/http"
 	"reflect"
 	"time"
 
@@ -37,12 +41,16 @@ import (
 )
 
 type Service struct {
-	poolManager *PoolManager
-	fileMonitor watch.Interface
-	conn        *libvirt.Connect
-	connNotify  chan libvirtutil.ConnectEvent
-	clientset   *kubernetes.Clientset
-	repo        *Repository
+	poolManager     *PoolManager
+	fileMonitor     watch.Interface
+	imagefileclient *api.VirtimagefileClient
+	volumeStreamer  *VolumeStreamer
+	conn            *libvirt.Connect
+	connNotify      chan libvirtutil.ConnectEvent
+	clientset       *kubernetes.Clientset
+	repo            *Repository
+	uploadOp        chan *UploadVolumeData
+	downloadOp      chan *DownloadVolumeData
 }
 
 func getKubeConfig(kubeconfig string) (*rest.Config, error) {
@@ -52,7 +60,7 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func NewService(libvirtURI string, kubeconfigfile string, reponame string, repopath string) (*Service, error) {
+func NewService(libvirtURI string, streamAddr string, streamInsecure bool, streamTLSConfig *tls.Config, kubeconfigfile string, reponame string, repopath string) (*Service, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
@@ -95,13 +103,19 @@ func NewService(libvirtURI string, kubeconfigfile string, reponame string, repop
 
 	glog.V(1).Infof("Got repo %s", imagerepo)
 
+	repo := CreateRepository(clientset, imagerepoclient, imagefileclient, imagerepo, repopath)
+
 	svc := &Service{
-		poolManager: NewPoolManager(reponame, repopath),
-		fileMonitor: fileMonitor,
-		connNotify:  make(chan libvirtutil.ConnectEvent, 1),
-		clientset:   clientset,
-		repo:        CreateRepository(imagerepoclient, imagefileclient, imagerepo, repopath),
+		poolManager:     NewPoolManager(reponame, repopath),
+		fileMonitor:     fileMonitor,
+		imagefileclient: imagefileclient,
+		connNotify:      make(chan libvirtutil.ConnectEvent, 1),
+		clientset:       clientset,
+		repo:            repo,
+		uploadOp:        make(chan *UploadVolumeData, 1),
+		downloadOp:      make(chan *DownloadVolumeData, 1),
 	}
+	svc.volumeStreamer = NewVolumeStreamer(streamAddr, streamInsecure, streamTLSConfig, svc)
 
 	libvirtutil.OpenConnect(libvirtURI, svc.connNotify)
 
@@ -125,8 +139,77 @@ func (s *Service) connectFailed() {
 	s.conn = nil
 }
 
+type UploadVolumeData struct {
+	// Input
+	imagerepo string
+	imagefile string
+	token     string
+
+	// Output
+	stream *libvirtutil.StreamIO
+	length uint64
+	status int
+	done   chan error
+}
+
+func (r *Service) UploadVolume(imagerepo, imagefile, token string) (io.WriteCloser, uint64, int, error) {
+	data := &UploadVolumeData{
+		imagerepo: imagerepo,
+		imagefile: imagefile,
+		token:     token,
+		done:      make(chan error, 1),
+	}
+
+	glog.V(1).Infof("Queuing upload request")
+	r.uploadOp <- data
+
+	glog.V(1).Infof("Waiting for upload response")
+	err := <-data.done
+
+	glog.V(1).Infof("Upload response %d %s", data.status, err)
+
+	return data.stream, data.length, data.status, err
+}
+
+type DownloadVolumeData struct {
+	// Input
+	imagerepo string
+	imagefile string
+	token     string
+
+	// Output
+	stream   *libvirtutil.StreamIO
+	length   uint64
+	filename string
+	status   int
+	done     chan error
+}
+
+func (r *Service) DownloadVolume(imagerepo, imagefile, token string) (io.ReadCloser, uint64, string, int, error) {
+	data := &DownloadVolumeData{
+		imagerepo: imagerepo,
+		imagefile: imagefile,
+		token:     token,
+		done:      make(chan error, 1),
+	}
+
+	glog.V(1).Infof("Queuing download request")
+	r.downloadOp <- data
+
+	glog.V(1).Infof("Waiting for download response")
+	err := <-data.done
+
+	glog.V(1).Infof("Download response %d %s", data.status, err)
+
+	return data.stream, data.length, data.filename, data.status, err
+}
+
 func (s *Service) Run() error {
 	glog.V(1).Info("Running image repo service")
+
+	streamDone := make(chan error, 1)
+
+	go s.volumeStreamer.Run(streamDone)
 
 	ticker := time.NewTicker(time.Second * 15)
 
@@ -137,6 +220,10 @@ func (s *Service) Run() error {
 
 	for {
 		select {
+		case streamErr := <-streamDone:
+			glog.V(1).Infof("Error from streamer %s", streamErr)
+			return streamErr
+
 		case hypEvent := <-s.connNotify:
 			switch hypEvent.Type {
 			case libvirtutil.ConnectReady:
@@ -178,6 +265,50 @@ func (s *Service) Run() error {
 		case <-ticker.C:
 			glog.V(1).Info("Updating repo")
 			s.repo.Refresh()
+
+		case data := <-s.uploadOp:
+			if s.conn == nil {
+				data.status = http.StatusInternalServerError
+				data.done <- fmt.Errorf("Not currently connected to libvirtd")
+				continue
+			}
+			stream, err := s.conn.NewStream(0)
+			if err != nil {
+				data.done <- err
+				continue
+			}
+			length, status, err := s.repo.UploadVolume(stream, data.length, data.imagerepo, data.imagefile, data.token)
+			if err != nil {
+				stream.Free()
+			} else {
+				data.stream = libvirtutil.NewStreamIO(stream)
+			}
+			data.length = length
+			data.status = status
+			data.done <- err
+
+		case data := <-s.downloadOp:
+			if s.conn == nil {
+				data.status = http.StatusInternalServerError
+				data.done <- fmt.Errorf("Not currently connected to libvirtd")
+				continue
+			}
+			stream, err := s.conn.NewStream(0)
+			if err != nil {
+				data.done <- err
+				continue
+			}
+			length, filename, status, err := s.repo.DownloadVolume(stream, data.imagerepo, data.imagefile, data.token)
+			glog.V(1).Infof("Send response %d, %s", status, err)
+			if err != nil {
+				stream.Free()
+			} else {
+				data.stream = libvirtutil.NewStreamIO(stream)
+			}
+			data.length = length
+			data.filename = filename
+			data.status = status
+			data.done <- err
 		}
 	}
 

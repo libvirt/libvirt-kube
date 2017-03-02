@@ -21,12 +21,14 @@ package imagerepo
 
 import (
 	"fmt"
+	"net/http"
 	"path"
 	"regexp"
 
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"github.com/libvirt/libvirt-go-xml"
+	"k8s.io/client-go/kubernetes"
 
 	"libvirt.org/libvirt-kube/pkg/api"
 	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
@@ -70,6 +72,7 @@ type RepositoryFile struct {
 }
 
 type Repository struct {
+	clientset  *kubernetes.Clientset
 	repoclient *api.VirtimagerepoClient
 	fileclient *api.VirtimagefileClient
 
@@ -208,7 +211,7 @@ func jobWorker(pendingJobs chan RepositoryJob, completedJobs chan RepositoryJob)
 	glog.V(1).Info("Job worker exiting")
 }
 
-func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.VirtimagefileClient, resource *apiv1.Virtimagerepo, repopath string) *Repository {
+func CreateRepository(clientset *kubernetes.Clientset, repoclient *api.VirtimagerepoClient, fileclient *api.VirtimagefileClient, resource *apiv1.Virtimagerepo, repopath string) *Repository {
 	pendingJobs := make(chan RepositoryJob, 100)
 	completedJobs := make(chan RepositoryJob, 100)
 
@@ -225,6 +228,7 @@ func CreateRepository(repoclient *api.VirtimagerepoClient, fileclient *api.Virti
 	fullpath := path.Join(repopath, name)
 
 	return &Repository{
+		clientset:     clientset,
 		repoclient:    repoclient,
 		fileclient:    fileclient,
 		resource:      resource,
@@ -541,6 +545,7 @@ func (r *Repository) ModifyFile(file *apiv1.Virtimagefile) {
 		r.pendingJobs <- job
 	}
 
+	glog.V(1).Infof("Updated image file version %s", file.Metadata.ResourceVersion)
 	fileState.resource = file
 }
 
@@ -566,4 +571,105 @@ func (r *Repository) DeleteFile(file *apiv1.Virtimagefile) {
 		fileState.vol = nil
 	}
 	delete(r.files, name)
+}
+
+func (r *Repository) UploadVolume(stream *libvirt.Stream, length uint64, imagerepo, imagefile, token string) (uint64, int, error) {
+	if imagerepo != r.resource.Metadata.Name {
+		return 0, http.StatusNotFound, fmt.Errorf("Repo %s does not match %s", imagerepo, r.resource.Metadata.Name)
+	}
+
+	name := makeVolName(imagefile, r.resource.Spec.Format)
+	file, ok := r.files[name]
+	if !ok {
+		return 0, http.StatusNotFound, fmt.Errorf("No volume %s in repo", imagefile)
+	}
+
+	if file.resource.Spec.Stream.AccessMode != apiv1.VirtimagefileStreamUpload && file.resource.Spec.Stream.AccessMode != apiv1.VirtimagefileStreamBoth {
+		return 0, http.StatusForbidden, fmt.Errorf("Volume does not permit uploading")
+	}
+
+	if file.resource.Spec.Stream.TokenSecret == "" {
+		return 0, http.StatusForbidden, fmt.Errorf("Volume does not permit uploading")
+	}
+
+	wantToken, err := api.GetSecretValue(r.clientset, file.resource.Spec.Stream.TokenSecret, file.resource.Metadata.Namespace, "libvirt.org/kube/virtimagefile/stream", "token")
+	if err != nil {
+		return 0, http.StatusForbidden, fmt.Errorf("Volume does not permit uploading")
+	}
+
+	if len(wantToken) == 0 {
+		return 0, http.StatusForbidden, fmt.Errorf("Access token must be non-zero length")
+	}
+
+	if string(wantToken) != token {
+		return 0, http.StatusUnauthorized, fmt.Errorf("Access token requird")
+	}
+
+	if file.vol == nil {
+		return 0, http.StatusNotFound, fmt.Errorf("Volume is not yet created")
+	}
+
+	info, err := file.vol.GetInfoFlags(libvirt.STORAGE_VOL_GET_PHYSICAL)
+	if err != nil {
+		return 0, http.StatusInternalServerError, err
+	}
+
+	err = file.vol.Upload(stream, 0, info.Allocation, 0)
+	if err != nil {
+		return 0, http.StatusInternalServerError, err
+	}
+
+	return info.Allocation, 0, nil
+}
+
+func (r *Repository) DownloadVolume(stream *libvirt.Stream, imagerepo, imagefile, token string) (uint64, string, int, error) {
+	if imagerepo != r.resource.Metadata.Name {
+		return 0, "", http.StatusNotFound, fmt.Errorf("Repo %s does not match %s", imagerepo, r.resource.Metadata.Name)
+	}
+
+	name := makeVolName(imagefile, r.resource.Spec.Format)
+	file, ok := r.files[name]
+	if !ok {
+		return 0, "", http.StatusNotFound, fmt.Errorf("No volume %s in repo", imagefile)
+	}
+
+	if file.resource.Spec.Stream.AccessMode != apiv1.VirtimagefileStreamDownload && file.resource.Spec.Stream.AccessMode != apiv1.VirtimagefileStreamBoth {
+		return 0, "", http.StatusForbidden, fmt.Errorf("Volume does not permit downloading")
+	}
+
+	if file.resource.Spec.Stream.TokenSecret == "" {
+		return 0, "", http.StatusForbidden, fmt.Errorf("Volume does not permit downloading")
+	}
+
+	wantToken, err := api.GetSecretValue(r.clientset, file.resource.Spec.Stream.TokenSecret, file.resource.Metadata.Namespace, "libvirt.org/kube/virtimagefile/stream", "token")
+	if err != nil {
+		return 0, "", http.StatusForbidden, fmt.Errorf("Volume does not permit downloading")
+	}
+
+	if len(wantToken) == 0 {
+		return 0, "", http.StatusForbidden, fmt.Errorf("Access token must be non-zero length")
+	}
+
+	if string(wantToken) != token {
+		return 0, "", http.StatusUnauthorized, fmt.Errorf("Access token required")
+	}
+
+	if file.vol == nil {
+		return 0, "", http.StatusNotFound, fmt.Errorf("Volume is not yet created")
+	}
+
+	info, err := file.vol.GetInfoFlags(libvirt.STORAGE_VOL_GET_PHYSICAL)
+	if err != nil {
+		glog.V(1).Infof("Failed getinfo flags")
+		return 0, "", http.StatusInternalServerError, err
+	}
+
+	glog.V(1).Infof("Vol %d %d", info.Allocation, info.Capacity)
+
+	err = file.vol.Download(stream, 0, info.Allocation, 0)
+	if err != nil {
+		return 0, "", http.StatusInternalServerError, err
+	}
+
+	return info.Allocation, fmt.Sprintf("%s.%s", imagefile, r.resource.Spec.Format), 0, nil
 }
