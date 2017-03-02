@@ -241,7 +241,16 @@ func (s *Service) Run() error {
 				}
 			}
 			pool.Free()
-		case objEvent := <-s.fileMonitor.ResultChan():
+		case objEvent, more := <-s.fileMonitor.ResultChan():
+			if !more {
+				glog.V(1).Infof("Got EOF on file monitor")
+				fileMonitor, err := s.imagefileclient.Watch()
+				if err != nil {
+					return err
+				}
+				s.fileMonitor = fileMonitor
+				continue
+			}
 			if objEvent.Type == watch.Error {
 				glog.V(1).Infof("Got file error %s", objEvent.Object)
 				continue
