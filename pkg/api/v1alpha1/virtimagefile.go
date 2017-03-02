@@ -70,6 +70,14 @@ const (
 	VirtimagefileFailed = "Failed"
 )
 
+type VirtimagefileStreamAccessMode string
+
+const (
+	VirtimagefileStreamUpload   = "Upload"
+	VirtimagefileStreamDownload = "Download"
+	VirtimagefileStreamBoth     = "Both"
+)
+
 // VirtimagefileSpec holds specification parameters of a Virtimagefile deployment.
 type VirtimagefileSpec struct {
 	// Name of Virtimagerepo resource that owns this
@@ -82,6 +90,17 @@ type VirtimagefileSpec struct {
 
 	// Logical size of disk payload
 	Capacity uint64 `json:"capacity"`
+
+	Stream VirtimagefileStream `json:"stream"`
+}
+
+type VirtimagefileStream struct {
+	// Name of a 'secret' object providing an access
+	// control token to grant permission for upload
+	// or download of the content
+	TokenSecret string `json:"tokenSecret"`
+
+	AccessMode VirtimagefileStreamAccessMode `json:"accessMode"`
 }
 
 type VirtimagefileAccessMode string
