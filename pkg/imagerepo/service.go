@@ -233,14 +233,16 @@ func (s *Service) Run() error {
 			}
 		case pool := <-s.poolManager.Notify:
 			glog.V(1).Infof("Got pool ready %v", pool)
-			// Connection might have closed in meanwhile so check
-			if s.conn != nil {
-				err := s.repo.SetPool(pool)
-				if err != nil {
-					s.repo.Refresh()
+			if pool != nil {
+				// Connection might have closed in meanwhile so check
+				if s.conn != nil {
+					err := s.repo.SetPool(pool)
+					if err != nil {
+						s.repo.Refresh()
+					}
 				}
+				pool.Free()
 			}
-			pool.Free()
 		case objEvent, more := <-s.fileMonitor.ResultChan():
 			if !more {
 				glog.V(1).Infof("Got EOF on file monitor")
