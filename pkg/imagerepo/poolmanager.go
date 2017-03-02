@@ -82,6 +82,20 @@ func (m *PoolManager) load(conn *libvirt.Connect) {
 		} else {
 			glog.V(1).Infof("Failed to fetch pool %s", err)
 		}
+	} else {
+		active, err := pool.IsActive()
+		if err != nil {
+			glog.V(1).Infof("Failed to check pool state %s", err)
+			pool.Free()
+			pool = nil
+		} else if !active {
+			err := pool.Create(libvirt.STORAGE_POOL_CREATE_WITH_BUILD)
+			if err != nil {
+				glog.V(1).Infof("Failed to start pool %s", err)
+				pool.Free()
+				pool = nil
+			}
+		}
 	}
 
 	conn.Close()
