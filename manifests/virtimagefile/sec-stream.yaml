@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: imagefilestream
+type: libvirt.org/kube/virtimagefile/stream
+data:
+  token: MTIzNDU2
