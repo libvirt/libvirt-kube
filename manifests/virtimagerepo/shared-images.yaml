@@ -7,4 +7,4 @@ spec:
   # Would make to an NFS / CephFS / etc other
   # sharable persistent volume claim
   claimName: imagerepo-shared-images
-  format: qcow2
+  format: raw
