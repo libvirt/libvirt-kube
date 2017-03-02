@@ -237,7 +237,7 @@ func (s *Service) Run() error {
 				// Connection might have closed in meanwhile so check
 				if s.conn != nil {
 					err := s.repo.SetPool(pool)
-					if err != nil {
+					if err == nil {
 						s.repo.Refresh()
 					}
 				}
