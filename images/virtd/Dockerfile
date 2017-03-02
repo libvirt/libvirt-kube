@@ -1,4 +1,5 @@
-FROM fedora:25
+# We need libvirt 3.0.0, hence currently rawhide, not F25
+FROM fedora:rawhide
 MAINTAINER http://libvirt.org
 
 # USING THIS CONTAINER
