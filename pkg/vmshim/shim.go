@@ -45,7 +45,7 @@ type Shim struct {
 	imageRepoPath   string
 	imageRepoClient *api.VirtimagerepoClient
 	imageFileClient *api.VirtimagefileClient
-	template        *apiv1.VirttemplateSpec
+	machine         *apiv1.VirtmachineSpec
 	hypervisor      *libvirt.Connect
 	domain          *libvirt.Domain
 	shutdown        chan bool
@@ -70,7 +70,7 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func NewShim(templateFile string, libvirtURI string, imageRepoPath string, kubeconfigfile string) (*Shim, error) {
+func NewShim(machineFile string, libvirtURI string, imageRepoPath string, kubeconfigfile string) (*Shim, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
@@ -96,13 +96,13 @@ func NewShim(templateFile string, libvirtURI string, imageRepoPath string, kubec
 		return nil, err
 	}
 
-	templateYAML, err := ioutil.ReadFile(templateFile)
+	machineYAML, err := ioutil.ReadFile(machineFile)
 	if err != nil {
 		return nil, err
 	}
 
-	template := &apiv1.VirttemplateSpec{}
-	err = yaml.Unmarshal(templateYAML, &template)
+	machine := &apiv1.VirtmachineSpec{}
+	err = yaml.Unmarshal(machineYAML, &machine)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func NewShim(templateFile string, libvirtURI string, imageRepoPath string, kubec
 		imageRepoPath:   imageRepoPath,
 		imageFileClient: imageFileClient,
 		imageRepoClient: imageRepoClient,
-		template:        template,
+		machine:         machine,
 		hypervisor:      hypervisor,
 		shutdown:        make(chan bool, 1),
 		sighandler:      make(chan os.Signal, 1),
@@ -143,7 +143,7 @@ func (s *Shim) Run() error {
 	if partition != "" {
 		domdesign.SetResourcePartition(partition)
 	}
-	err = domdesign.ApplyVirtTemplate(s.template)
+	err = domdesign.ApplyVirtMachine(s.machine)
 	if err != nil {
 		return err
 	}

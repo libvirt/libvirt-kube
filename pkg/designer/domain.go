@@ -47,11 +47,11 @@ func NewDomainDesigner(clientset *kubernetes.Clientset, imageRepoPath string, im
 	}
 }
 
-func (d *DomainDesigner) getVolumeLocalPath(etype string, src *apiv1.VirttemplateStorage) (string, error) {
+func (d *DomainDesigner) getVolumeLocalPath(etype string, src *apiv1.VirtmachineStorage) (string, error) {
 	return "", fmt.Errorf("Cannot setup volume")
 }
 
-func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirttemplateSpec) error {
+func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirtmachineSpec) error {
 	d.Domain.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{
 			Arch: tmpl.Arch,
@@ -117,7 +117,7 @@ func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirttemplateSpec) error {
 	return nil
 }
 
-func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirttemplateSpec) error {
+func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirtmachineSpec) error {
 	if (tmpl.Memory.Initial%tmpl.Memory.Slots) != 0 ||
 		(tmpl.Memory.Maximum%tmpl.Memory.Slots) != 0 {
 		return fmt.Errorf("Memory present %d and maximum %d must be multiple of slots %d",
@@ -145,7 +145,7 @@ func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirttemplateSpec) error {
 	return nil
 }
 
-func (d *DomainDesigner) setCPUConfig(tmpl *apiv1.VirttemplateSpec) error {
+func (d *DomainDesigner) setCPUConfig(tmpl *apiv1.VirtmachineSpec) error {
 	// TODO
 	return nil
 }
@@ -229,7 +229,7 @@ func (d *DomainDesigner) setDiskConfigISCSI(src *kubeapiv1.ISCSIVolumeSource, di
 	return nil
 }
 
-func (d *DomainDesigner) setDiskConfigPersistentVolume(pv *apiv1.VirttemplateStoragePersistentVolume, diskConfig *libvirtxml.DomainDisk) error {
+func (d *DomainDesigner) setDiskConfigPersistentVolume(pv *apiv1.VirtmachineStoragePersistentVolume, diskConfig *libvirtxml.DomainDisk) error {
 	pvname, pvspec, err := api.GetVolumeSpec(d.clientset, pv.ClaimName, kubeapi.NamespaceDefault)
 	if err != nil {
 		return err
@@ -255,7 +255,7 @@ func makeVolName(path, format string) string {
 	return fmt.Sprintf("%s.%s", base, format)
 }
 
-func (d *DomainDesigner) setDiskConfigImageFile(storage *apiv1.VirttemplateStorageImageFile, diskConfig *libvirtxml.DomainDisk) error {
+func (d *DomainDesigner) setDiskConfigImageFile(storage *apiv1.VirtmachineStorageImageFile, diskConfig *libvirtxml.DomainDisk) error {
 	imagefile, err := d.imageFileClient.Get(storage.FileName)
 	if err != nil {
 		return err
@@ -281,7 +281,7 @@ func (d *DomainDesigner) setDiskConfigImageFile(storage *apiv1.VirttemplateStora
 	return nil
 }
 
-func (d *DomainDesigner) setDiskConfig(disk *apiv1.VirttemplateDisk, devs *libvirtxml.DomainDeviceList) error {
+func (d *DomainDesigner) setDiskConfig(disk *apiv1.VirtmachineDisk, devs *libvirtxml.DomainDeviceList) error {
 	diskConfig := libvirtxml.DomainDisk{
 		Device: disk.Device,
 	}
@@ -310,7 +310,7 @@ func (d *DomainDesigner) setDiskConfig(disk *apiv1.VirttemplateDisk, devs *libvi
 	return nil
 }
 
-func (d *DomainDesigner) setDeviceConfig(tmpl *apiv1.VirttemplateSpec) error {
+func (d *DomainDesigner) setDeviceConfig(tmpl *apiv1.VirtmachineSpec) error {
 	d.Domain.Devices = &libvirtxml.DomainDeviceList{}
 
 	for _, disk := range tmpl.Devices.Disks {
@@ -328,7 +328,7 @@ func (d *DomainDesigner) SetResourcePartition(partition string) {
 	}
 }
 
-func (d *DomainDesigner) ApplyVirtTemplate(tmpl *apiv1.VirttemplateSpec) error {
+func (d *DomainDesigner) ApplyVirtMachine(tmpl *apiv1.VirtmachineSpec) error {
 	d.Domain.Type = tmpl.Type
 
 	if err := d.setOSConfig(tmpl); err != nil {
