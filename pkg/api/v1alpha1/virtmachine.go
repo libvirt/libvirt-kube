@@ -20,8 +20,8 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 //
@@ -38,16 +38,16 @@ import (
 
 // Virtmachine defines a Virtmachine deployment.
 type Virtmachine struct {
-	metav1.TypeMeta `json:",inline"`
-	v1.ObjectMeta   `json:"metadata,omitempty"`
-	Spec            VirtmachineSpec `json:"spec"`
+	v1.TypeMeta `json:",inline"`
+	Metadata    v1.ObjectMeta   `json:"metadata,omitempty"`
+	Spec        VirtmachineSpec `json:"spec"`
 	//	Status          *VirtmachineStatus `json:"status,omitempty"`
 }
 
 // VirtmachineList is a list of Virtmachines.
 type VirtmachineList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	v1.TypeMeta `json:",inline"`
+	Metadata    v1.ListMeta `json:"metadata,omitempty"`
 
 	Items []*Virtmachine `json:"items"`
 }
@@ -167,4 +167,24 @@ type VirtmachineVideo struct {
 	// 'vga', 'cirrus', 'qxl', 'virtio', 'vmvga'
 	Type string `json:"type"`
 	VRam int    `json:"vram"`
+}
+
+// Required to satisfy Object interface
+func (ni *Virtmachine) GetObjectKind() schema.ObjectKind {
+	return &ni.TypeMeta
+}
+
+// Required to satisfy ObjectMetaAccessor interface
+func (ni *Virtmachine) GetObjectMeta() v1.Object {
+	return &ni.Metadata
+}
+
+// Required to satisfy Object interface
+func (ni *VirtmachineList) GetObjectKind() schema.ObjectKind {
+	return &ni.TypeMeta
+}
+
+// Required to satisfy ListMetaAccessor interface
+func (ni *VirtmachineList) GetListMeta() v1.List {
+	return &ni.Metadata
 }
