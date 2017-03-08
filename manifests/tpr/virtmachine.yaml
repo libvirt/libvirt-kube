@@ -1,0 +1,7 @@
+metadata:
+  name: virtmachine.libvirt.org
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+description: Virt machines
+versions:
+  - name: v1alpha1
