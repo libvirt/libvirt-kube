@@ -1,0 +1,46 @@
+---
+apiVersion: libvirt.org/v1alpha1
+kind: Virtmachine
+metadata:
+  name: demo
+spec:
+  type: kvm
+  arch: x86_64
+  machine: pc
+  boot:
+    type: firmware
+    firmware:
+      type: bios
+  cpu:
+    count: 4
+    features:
+      -
+        name: pdpe1gb
+        policy: require
+    mode: custom
+    model: Nehalem
+  memory:
+    maximum: 1000
+    initial: 500
+    slots: 5
+  topology:
+    cores: 2
+    nodes: 2
+    sockets: 2
+    threads: 1
+  devices:
+    disk:
+  #    -
+  #      bootindex: 1
+  #      device: disk
+  #      encrypt:
+  #        luks:
+  #          passphrase: 123456
+  #      source:
+  #        persistentVolume:
+  #          claimName: pvc-rbd1
+      -
+        device: disk
+        source:
+          imageFile:
+            fileName: template-fedora25
