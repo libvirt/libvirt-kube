@@ -133,7 +133,7 @@ func (s *Shim) domainLifecycleEvent(c *libvirt.Connect, d *libvirt.Domain, ev *l
 }
 
 func (s *Shim) Run() error {
-	partition, err := resource.GetResourcePartition(os.Getpid())
+	partition, err := resource.GetResourcePartition(os.Getpid(), "name=systemd")
 	if err != nil {
 		return err
 	}

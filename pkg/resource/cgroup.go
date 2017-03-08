@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func GetResourcePartition(pid int) (string, error) {
+func GetResourcePartition(pid int, controller string) (string, error) {
 	cgfile := fmt.Sprintf("/proc/%d/cgroup", pid)
 
 	cgfh, err := os.Open(cgfile)
@@ -30,10 +30,10 @@ func GetResourcePartition(pid int) (string, error) {
 		}
 	}
 
-	val, ok := locations["memory"]
+	val, ok := locations[controller]
 	if !ok {
-		return "", fmt.Errorf("Memory controller not present for %s",
-			cgfile)
+		return "", fmt.Errorf("Controller '%s' not present for %s",
+			controller, cgfile)
 	}
 
 	return val, nil
