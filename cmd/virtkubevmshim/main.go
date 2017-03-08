@@ -30,8 +30,10 @@ import (
 )
 
 var (
-	config = pflag.String("config", "/data/vm.json",
-		"VM template spec")
+	shimaddr = pflag.String("shim-addr", "/var/run/virtkubevmshim/shim.sock",
+		"UNIX socket path for shim service")
+	skipvalidate = pflag.Bool("no-validate", false,
+		"Skip validating client container identity")
 	connect = pflag.String("connect", "qemu:///system",
 		"Libvirt connection URI")
 	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
@@ -44,7 +46,7 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := vmshim.NewShim(*config, *connect, *repopath, *kubeconfig)
+	svc, err := vmshim.NewShim(*shimaddr, *skipvalidate, *connect, *repopath, *kubeconfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
