@@ -70,6 +70,19 @@ func NewGuardian(machine, namespace string, shimAddr string, shimTimeout time.Du
 	}, nil
 }
 
+func (g *Guardian) waitForError(shimconn net.Conn, notify chan error) {
+	msg := make([]byte, 1024)
+	n, err := shimconn.Read(msg)
+	if err != nil {
+		notify <- err
+	}
+	if n == 0 {
+		notify <- fmt.Errorf("Machine terminated without error message")
+	} else {
+		notify <- fmt.Errorf("%s", string(msg[0:n]))
+	}
+}
+
 func (g *Guardian) Watch() error {
 	shimconn, err := net.DialTimeout("unix", g.shimAddr, g.shimTimeout)
 	if err != nil {
@@ -98,12 +111,18 @@ func (g *Guardian) Watch() error {
 	// Leave shimconn open hereafter - closing the socket is
 	// the sign the shim uses to kill off the VM
 
+	errnotify := make(chan error)
+	go g.waitForError(shimconn, errnotify)
+
 	glog.V(1).Infof("Started %s/%s", g.namespace, g.machine)
 
 	for {
 		select {
 		case sig := <-g.sighandler:
 			glog.V(1).Infof("Signal %s, stopping wait", sig)
+			return nil
+		case err := <-errnotify:
+			glog.V(1).Infof("Machine done %s", err)
 			return nil
 		}
 	}
