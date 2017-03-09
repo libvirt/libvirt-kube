@@ -38,11 +38,20 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"libvirt.org/libvirt-kube/pkg/api"
+	apiv1 "libvirt.org/libvirt-kube/pkg/api/v1alpha1"
 	"libvirt.org/libvirt-kube/pkg/designer"
 	"libvirt.org/libvirt-kube/pkg/libvirtutil"
 	"libvirt.org/libvirt-kube/pkg/resource"
 	"libvirt.org/libvirt-kube/pkg/vmshim/rpc"
 )
+
+type Machine struct {
+	uuid     string
+	client   *api.VirtmachineClient
+	machine  *apiv1.Virtmachine
+	domain   *libvirt.Domain
+	shutdown chan bool
+}
 
 type Shim struct {
 	shimAddr        string
@@ -52,9 +61,8 @@ type Shim struct {
 	imageRepoClient *api.VirtimagerepoClient
 	imageFileClient *api.VirtimagefileClient
 	conn            *libvirt.Connect
-	domains         map[string]*libvirt.Domain
 	connNotify      chan libvirtutil.ConnectEvent
-	shutdown        map[string]chan bool
+	machines        map[string]*Machine // UUID is key
 	lock            sync.Mutex
 	skipValidate    bool
 }
@@ -73,6 +81,21 @@ func NewShim(shimAddr string, skipValidate bool, libvirtURI string, imageRepoPat
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterVirtimagerepo(clientset)
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterVirtimagefile(clientset)
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterVirtmachine(clientset)
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +119,7 @@ func NewShim(shimAddr string, skipValidate bool, libvirtURI string, imageRepoPat
 		imageFileClient: imageFileClient,
 		imageRepoClient: imageRepoClient,
 		connNotify:      make(chan libvirtutil.ConnectEvent, 1),
-		shutdown:        make(map[string]chan bool),
-		domains:         make(map[string]*libvirt.Domain),
+		machines:        make(map[string]*Machine),
 	}
 
 	libvirtutil.OpenConnect(libvirtURI, shim.connNotify)
@@ -237,16 +259,16 @@ func (s *Shim) domainLifecycleEvent(c *libvirt.Connect, d *libvirt.Domain, ev *l
 	}
 	if ev.Event == libvirt.DOMAIN_EVENT_STOPPED {
 		s.lock.Lock()
-		shutdown, ok := s.shutdown[uuid]
+		machine, ok := s.machines[uuid]
 		s.lock.Unlock()
 		glog.V(1).Infof("Notify shutdown domain %s", uuid)
 		if ok {
-			shutdown <- true
+			machine.shutdown <- true
 		}
 	}
 }
 
-func (s *Shim) startMachine(namespace, name, partition string) (*libvirt.Domain, error) {
+func (s *Shim) startMachine(namespace, name, partition string) (*Machine, error) {
 	glog.V(1).Infof("Start machine='%s', namespace='%s'", name, namespace)
 
 	machineClient, err := api.NewVirtmachineClient(namespace, s.kubeconfig)
@@ -263,7 +285,7 @@ func (s *Shim) startMachine(namespace, name, partition string) (*libvirt.Domain,
 	if partition != "" {
 		domdesign.SetResourcePartition(partition)
 	}
-	err = domdesign.ApplyVirtMachine(&machine.Spec)
+	err = domdesign.ApplyVirtMachine(&machine.Spec.Hardware)
 	if err != nil {
 		return nil, err
 	}
@@ -321,11 +343,26 @@ func (s *Shim) startMachine(namespace, name, partition string) (*libvirt.Domain,
 		return nil, err
 	}
 
-	key := fmt.Sprintf("%s/%s", namespace, name)
+	machine.Status.Hardware = machine.Spec.Hardware
 
-	s.domains[key] = domain
+	machine, err = machineClient.Update(machine)
+	if err != nil {
+		s.stopMachine(domain)
+		return nil, err
+	}
 
-	return domain, nil
+	machineInfo := &Machine{
+		uuid:     cfg.UUID,
+		machine:  machine,
+		client:   machineClient,
+		domain:   domain,
+		shutdown: make(chan bool, 1),
+	}
+	s.lock.Lock()
+	s.machines[cfg.UUID] = machineInfo
+	s.lock.Unlock()
+
+	return machineInfo, nil
 }
 
 func (s *Shim) waitForClientEOF(conn net.Conn, notify chan bool) {
@@ -336,26 +373,20 @@ func (s *Shim) waitForClientEOF(conn net.Conn, notify chan bool) {
 	notify <- true
 }
 
-func (s *Shim) waitForMachineStop(conn net.Conn, dom *libvirt.Domain) error {
+func (s *Shim) waitForMachineStop(conn net.Conn, machine *Machine) error {
+
 	defer func() {
-		dom.Destroy()
-		dom.Free()
+		machine.domain.Free()
+		s.lock.Lock()
+		close(machine.shutdown)
+		delete(s.machines, machine.uuid)
+		s.lock.Unlock()
 	}()
-
-	uuid, err := dom.GetUUIDString()
-	if err != nil {
-		return err
-	}
-
-	shutdown := make(chan bool, 1)
-	s.lock.Lock()
-	s.shutdown[uuid] = shutdown
-	s.lock.Unlock()
 
 	// State may have changed between starting it and registering
 	// for lifecycle events so check again now. After this point
 	// we're guaranteed an event
-	isActive, err := dom.IsActive()
+	isActive, err := machine.domain.IsActive()
 	if err != nil {
 		return err
 	}
@@ -369,9 +400,9 @@ func (s *Shim) waitForMachineStop(conn net.Conn, dom *libvirt.Domain) error {
 		select {
 		case _ = <-eofNotify:
 			glog.V(1).Info("Saw client exit, killing guest")
-			s.stopMachine(dom)
+			s.stopMachine(machine.domain)
 
-		case _ = <-shutdown:
+		case _ = <-machine.shutdown:
 			glog.V(1).Info("Saw guest shutdown, exiting")
 			// nada
 		}
@@ -379,9 +410,11 @@ func (s *Shim) waitForMachineStop(conn net.Conn, dom *libvirt.Domain) error {
 		glog.V(1).Info("Guest already shutdown, exiting")
 	}
 
-	s.lock.Lock()
-	delete(s.shutdown, uuid)
-	s.lock.Unlock()
+	machine.machine.Status.Hardware = apiv1.VirtmachineHardware{}
+	_, err = machine.client.Update(machine.machine)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

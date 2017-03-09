@@ -24,36 +24,34 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-//
-// The general guiding rule for the configuration associated with
-// a VirtmachineSpec is that it must *NOT* refer to any host
-// resources directly. ie use of file paths is forbidden, use of
-// specific host PCI IDs, or equivalent addresses is forbidden.
-//
-// There must be a layer of indirection, to refer to a host resource
-// via a k8s API resource of some kind. The trusted component will
-// convert from the k8s API resource reference, to the host specific
-// file path to give to libvirt.
-//
-
 // Virtmachine defines a Virtmachine deployment.
 type Virtmachine struct {
 	v1.TypeMeta `json:",inline"`
-	Metadata    v1.ObjectMeta   `json:"metadata,omitempty"`
-	Spec        VirtmachineSpec `json:"spec"`
-	//	Status          *VirtmachineStatus `json:"status,omitempty"`
+	Metadata    v1.ObjectMeta     `json:"metadata"`
+	Spec        VirtmachineSpec   `json:"spec"`
+	Status      VirtmachineStatus `json:"status"`
 }
 
 // VirtmachineList is a list of Virtmachines.
 type VirtmachineList struct {
 	v1.TypeMeta `json:",inline"`
-	Metadata    v1.ListMeta `json:"metadata,omitempty"`
+	Metadata    v1.ListMeta `json:"metadata"`
 
 	Items []*Virtmachine `json:"items"`
 }
 
 // VirtmachineSpec holds specification parameters of a Virtmachine deployment.
 type VirtmachineSpec struct {
+	// The hardware desired to be applied the running instance
+	Hardware VirtmachineHardware `json:"hardware"`
+}
+
+type VirtmachineStatus struct {
+	// The hardware currently applied to the running instance
+	Hardware VirtmachineHardware `json:"hardware"`
+}
+
+type VirtmachineHardware struct {
 	// Hypervisor type (libvirt: /domain/@type)
 	Type    string            `json:"type"`
 	Arch    string            `json:"arch"`

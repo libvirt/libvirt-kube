@@ -51,7 +51,7 @@ func (d *DomainDesigner) getVolumeLocalPath(etype string, src *apiv1.Virtmachine
 	return "", fmt.Errorf("Cannot setup volume")
 }
 
-func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirtmachineSpec) error {
+func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirtmachineHardware) error {
 	d.Domain.OS = &libvirtxml.DomainOS{
 		Type: &libvirtxml.DomainOSType{
 			Arch: tmpl.Arch,
@@ -117,7 +117,7 @@ func (d *DomainDesigner) setOSConfig(tmpl *apiv1.VirtmachineSpec) error {
 	return nil
 }
 
-func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirtmachineSpec) error {
+func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirtmachineHardware) error {
 	if (tmpl.Memory.Initial%tmpl.Memory.Slots) != 0 ||
 		(tmpl.Memory.Maximum%tmpl.Memory.Slots) != 0 {
 		return fmt.Errorf("Memory present %d and maximum %d must be multiple of slots %d",
@@ -145,7 +145,7 @@ func (d *DomainDesigner) setMemoryConfig(tmpl *apiv1.VirtmachineSpec) error {
 	return nil
 }
 
-func (d *DomainDesigner) setCPUConfig(tmpl *apiv1.VirtmachineSpec) error {
+func (d *DomainDesigner) setCPUConfig(tmpl *apiv1.VirtmachineHardware) error {
 	// TODO
 	return nil
 }
@@ -310,7 +310,7 @@ func (d *DomainDesigner) setDiskConfig(disk *apiv1.VirtmachineDisk, devs *libvir
 	return nil
 }
 
-func (d *DomainDesigner) setDeviceConfig(tmpl *apiv1.VirtmachineSpec) error {
+func (d *DomainDesigner) setDeviceConfig(tmpl *apiv1.VirtmachineHardware) error {
 	d.Domain.Devices = &libvirtxml.DomainDeviceList{}
 
 	for _, disk := range tmpl.Devices.Disks {
@@ -328,7 +328,7 @@ func (d *DomainDesigner) SetResourcePartition(partition string) {
 	}
 }
 
-func (d *DomainDesigner) ApplyVirtMachine(tmpl *apiv1.VirtmachineSpec) error {
+func (d *DomainDesigner) ApplyVirtMachine(tmpl *apiv1.VirtmachineHardware) error {
 	d.Domain.Type = tmpl.Type
 
 	if err := d.setOSConfig(tmpl); err != nil {
