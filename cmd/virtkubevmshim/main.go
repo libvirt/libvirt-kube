@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	shimaddr = pflag.String("shim-addr", "/var/run/virtkubevmshim/shim.sock",
+	shimaddr = pflag.String("shim-addr", "/run/virtkubevmshim/shim.sock",
 		"UNIX socket path for shim service")
 	skipvalidate = pflag.Bool("no-validate", false,
 		"Skip validating client container identity")
