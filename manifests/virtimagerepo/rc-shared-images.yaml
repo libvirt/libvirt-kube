@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: virtkubeimagerepo-shared-images
+  namespace: libvirt-kube
+spec:
+  replicas: 1
+  selector:
+    app: virtkubeimagerepo-shared-images
+  template:
+    metadata:
+      labels:
+        app: virtkubeimagerepo-shared-images
+    spec:
+      containers:
+      - name: virtkubeimagerepo
+        image: localhost:5000/libvirtkubeimagerepo
+        args:
+          # XXX remove insecure flag
+          - /usr/local/bin/virtkubeimagerepo
+          - --reponame
+          - shared-images
+          - --stream-insecure
+          - --logtostderr
+          - -v
+          - "1"
+        volumeMounts:
+          - mountPath: /run/libvirt
+            name: libvirt
+      volumes:
+      - name: libvirt
+        hostPath:
+          path: /srv/libvirt/run
