@@ -7,3 +7,5 @@ glide.lock
 manifests/libvirt/*pem
 manifests/libvirt/*info
 manifests/libvirt/sec-virtdx509ca.yaml
+images/vmshim/virtkubevmshim
+images/vmangel/virtkubevmangel

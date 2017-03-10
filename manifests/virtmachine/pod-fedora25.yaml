@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo
+spec:
+  containers:
+    - name: libvirtkubevmangel
+      image: localhost:5000/libvirtkubevmangel
+      args:
+        - /usr/local/bin/virtkubevmangel
+        - --machine
+        - demo
+        - --logtostderr
+        - -v
+        - "1"
+      env:
+        - name: LIBVIRT_KUBE_VM_ANGEL_POD
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: LIBVIRT_KUBE_VM_ANGEL_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      volumeMounts:
+        - mountPath: /run/virtkubevmshim
+          name: vmshim
+  volumes:
+    - name: vmshim
+      hostPath:
+        path: /srv/vmshim
