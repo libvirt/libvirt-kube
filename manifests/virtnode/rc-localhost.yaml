@@ -22,6 +22,11 @@ spec:
           - --logtostderr
           - -v
           - "1"
+        env:
+          - name: LIBVIRT_KUBE_NODEINFO_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         volumeMounts:
           - mountPath: /run/libvirt
             name: libvirt

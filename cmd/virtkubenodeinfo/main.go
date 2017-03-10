@@ -25,6 +25,7 @@ import (
 	"os"
 
 	"github.com/spf13/pflag"
+	kubeapi "k8s.io/client-go/pkg/api"
 
 	"libvirt.org/libvirt-kube/pkg/nodeinfo"
 )
@@ -34,7 +35,8 @@ var (
 		"Libvirt connection URI")
 	kubeconfig = pflag.String("kubeconfig", "", "Path to a kube config, if running outside cluster")
 
-	nodename = pflag.String("nodename", "localhost", "Name of virtnode resource to manage")
+	nodename  = pflag.String("nodename", "localhost", "Name of virtnode resource to manage")
+	namespace = pflag.String("namespace", "", "Namespace in which node was created")
 )
 
 func main() {
@@ -43,7 +45,14 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	svc, err := nodeinfo.NewService(*connect, *kubeconfig, *nodename)
+	if *namespace == "" {
+		*namespace = os.Getenv("LIBVIRT_KUBE_NODEINFO_NAMESPACE")
+		if *namespace == "" {
+			*namespace = kubeapi.NamespaceDefault
+		}
+	}
+
+	svc, err := nodeinfo.NewService(*connect, *kubeconfig, *nodename, *namespace)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

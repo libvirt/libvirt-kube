@@ -25,7 +25,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/libvirt/libvirt-go"
 	"k8s.io/client-go/kubernetes"
-	kubeapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -59,7 +58,7 @@ func getKubeConfig(kubeconfig string) (*rest.Config, error) {
 	return rest.InClusterConfig()
 }
 
-func NewService(libvirtURI string, kubeconfigfile string, nodename string) (*Service, error) {
+func NewService(libvirtURI string, kubeconfigfile string, nodename, namespace string) (*Service, error) {
 	kubeconfig, err := getKubeConfig(kubeconfigfile)
 	if err != nil {
 		return nil, err
@@ -75,7 +74,7 @@ func NewService(libvirtURI string, kubeconfigfile string, nodename string) (*Ser
 		return nil, err
 	}
 
-	nodeinfoclient, err := api.NewVirtnodeinfoClient(kubeapi.NamespaceDefault, kubeconfig)
+	nodeinfoclient, err := api.NewVirtnodeinfoClient(namespace, kubeconfig)
 	if err != nil {
 		return nil, err
 	}
