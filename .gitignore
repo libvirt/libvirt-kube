@@ -10,3 +10,4 @@ manifests/libvirt/sec-virtdx509ca.yaml
 images/vmshim/virtkubevmshim
 images/vmangel/virtkubevmangel
 images/imagerepo/virtkubeimagerepo
+images/nodeinfo/virtkubenodeinfo

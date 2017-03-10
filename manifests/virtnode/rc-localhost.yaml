@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: virtkubenodeinfo-localhost
+  namespace: libvirt-kube
+spec:
+  replicas: 1
+  selector:
+    app: virtkubenodeinfo-localhost
+  template:
+    metadata:
+      labels:
+        app: virtkubenodeinfo-localhost
+    spec:
+      containers:
+      - name: virtkubeimagerepo
+        image: localhost:5000/libvirtkubenodeinfo
+        args:
+          - /usr/local/bin/virtkubenodeinfo
+          - --nodename
+          - localhost
+          - --logtostderr
+          - -v
+          - "1"
+        volumeMounts:
+          - mountPath: /run/libvirt
+            name: libvirt
+      volumes:
+      - name: libvirt
+        hostPath:
+          path: /srv/libvirt/run
