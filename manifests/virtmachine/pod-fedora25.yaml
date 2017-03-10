@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: demo
+  name: fedora25
 spec:
   containers:
     - name: libvirtkubevmangel
@@ -9,7 +9,7 @@ spec:
       args:
         - /usr/local/bin/virtkubevmangel
         - --machine
-        - demo
+        - fedora25
         - --logtostderr
         - -v
         - "1"

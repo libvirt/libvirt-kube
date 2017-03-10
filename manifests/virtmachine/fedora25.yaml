@@ -1,7 +1,7 @@
 apiVersion: libvirt.org/v1alpha1
 kind: Virtmachine
 metadata:
-  name: demo
+  name: fedora25
 spec:
   hardware:
     type: kvm
