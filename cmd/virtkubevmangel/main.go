@@ -32,9 +32,10 @@ import (
 
 var (
 	machine   = pflag.String("machine", "", "Name of virtmachine resource")
-	namespace = pflag.String("namespace", "", "Namespace in which virtmachine resource was created")
-	shimaddr  = pflag.String("shimaddr", "/var/run/libvirt-kubelet-vmshim/grpc.sock",
-		"UNIX socket path for libvirt-kubelet-vmshim server")
+	pod       = pflag.String("pod", "", "Name of POD associated with the machine")
+	namespace = pflag.String("namespace", "", "Namespace in which machine and pod resource were created")
+	shimaddr  = pflag.String("shimaddr", "/var/run/virtkubevmshim/shim.sock",
+		"UNIX socket path for virtkubvmshim server")
 )
 
 func main() {
@@ -43,7 +44,15 @@ func main() {
 	// Convince glog that we really have parsed CLI
 	flag.CommandLine.Parse([]string{})
 
-	gdn, err := vmangel.NewGuardian(*machine, *namespace, *shimaddr, 5*time.Second)
+	if *namespace == "" {
+		*namespace = os.Getenv("LIBVIRT_KUBE_VM_ANGEL_NAMESPACE")
+	}
+
+	if *pod == "" {
+		*pod = os.Getenv("LIBVIRT_KUBE_VM_ANGEL_POD")
+	}
+
+	gdn, err := vmangel.NewGuardian(*machine, *namespace, *pod, *shimaddr, 5*time.Second)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

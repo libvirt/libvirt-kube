@@ -45,13 +45,16 @@ type Guardian struct {
 	sighandler  chan os.Signal
 }
 
-func NewGuardian(machine, namespace string, shimAddr string, shimTimeout time.Duration) (*Guardian, error) {
+func NewGuardian(machine, namespace, pod string, shimAddr string, shimTimeout time.Duration) (*Guardian, error) {
 
 	if namespace == "" {
 		namespace = kubeapi.NamespaceDefault
 	}
 	if machine == "" {
 		return nil, fmt.Errorf("Machine name cannot be empty")
+	}
+	if pod == "" {
+		return nil, fmt.Errorf("Pod name cannot be empty")
 	}
 
 	sighandler := make(chan os.Signal, 1)
@@ -64,6 +67,7 @@ func NewGuardian(machine, namespace string, shimAddr string, shimTimeout time.Du
 	return &Guardian{
 		shimAddr:    shimAddr,
 		shimTimeout: shimTimeout,
+		pod:         pod,
 		machine:     machine,
 		namespace:   namespace,
 		sighandler:  sighandler,
@@ -98,11 +102,13 @@ func (g *Guardian) Watch() error {
 	}
 	infobuf, err := yaml.Marshal(&info)
 	if err != nil {
+		glog.V(1).Infof("Cannot format request: %s", err)
 		return nil
 	}
 
 	n, err := shimconn.Write(infobuf)
 	if err != nil {
+		glog.V(1).Infof("Cannot send request: %s", err)
 		return nil
 	}
 	if n != len(infobuf) {
