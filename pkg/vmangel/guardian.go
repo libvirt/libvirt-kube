@@ -30,7 +30,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
-	kubeapi "k8s.io/client-go/pkg/api"
 
 	"libvirt.org/libvirt-kube/pkg/vmshim/rpc"
 )
@@ -46,16 +45,6 @@ type Guardian struct {
 }
 
 func NewGuardian(machine, namespace, pod string, shimAddr string, shimTimeout time.Duration) (*Guardian, error) {
-
-	if namespace == "" {
-		namespace = kubeapi.NamespaceDefault
-	}
-	if machine == "" {
-		return nil, fmt.Errorf("Machine name cannot be empty")
-	}
-	if pod == "" {
-		return nil, fmt.Errorf("Pod name cannot be empty")
-	}
 
 	sighandler := make(chan os.Signal, 1)
 

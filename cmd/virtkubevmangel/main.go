@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	kubeapi "k8s.io/client-go/pkg/api"
 
 	"libvirt.org/libvirt-kube/pkg/vmangel"
 )
@@ -46,10 +47,22 @@ func main() {
 
 	if *namespace == "" {
 		*namespace = os.Getenv("LIBVIRT_KUBE_VM_ANGEL_NAMESPACE")
+		if *namespace == "" {
+			*namespace = kubeapi.NamespaceDefault
+		}
 	}
 
 	if *pod == "" {
 		*pod = os.Getenv("LIBVIRT_KUBE_VM_ANGEL_POD")
+		if pod == "" {
+			fmt.Println("Pod name cannot be empty")
+			os.Exit(1)
+		}
+	}
+
+	if machine == "" {
+		fmt.Println("Machine name cannot be empty")
+		os.Exit(1)
 	}
 
 	gdn, err := vmangel.NewGuardian(*machine, *namespace, *pod, *shimaddr, 5*time.Second)
