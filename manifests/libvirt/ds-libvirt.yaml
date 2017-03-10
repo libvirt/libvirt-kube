@@ -21,30 +21,18 @@ spec:
         - name: libvirttls
           containerPort: 16514
           hostPort: 16514
-#        env:
-#        - name: LIBVIRT_LOG_FILTERS
-#          value: 1:command
-#        - name: LIBVIRT_LOG_OUTPUTS
-#          value: 1:stderr
+        env:
+        - name: LIBVIRT_LOG_FILTERS
+          value: 1:qemu 1:process
+        - name: LIBVIRT_LOG_OUTPUTS
+          value: 1:stderr
         volumeMounts:
         - name: virtdx509ca
           mountPath: /etc/pki/CA/libvirt
           readOnly: true
-        - name: virtetcqemu
-          mountPath: /etc/libvirt/qemu
-        - name: virtetcnwfilter
-          mountPath: /etc/libvirt/nwfilter
-        - name: virtetcsecrets
-          mountPath: /etc/libvirt/secrets
-        - name: virtetcstorage
-          mountPath: /etc/libvirt/storage
-        - name: virtlib
-          mountPath: /var/lib/libvirt
-        - name: virtlog
-          mountPath: /var/log/libvirt
-        - name: virtrun
-          mountPath: /run/libvirt
-        - name: dbusrun
+        - name: libvirt
+          mountPath: /srv/libvirt
+        - name: dbus
           mountPath: /run/dbus
         - name: cgroup
           mountPath: /sys/fs/cgroup
@@ -53,40 +41,22 @@ spec:
       - name: libvirtkubevirtlogd
         image: localhost:5000/libvirtkubevirtlogd
         volumeMounts:
-        - name: virtrun
-          mountPath: /run/libvirt
-        - name: virtlog
-          mountPath: /var/log/libvirt
+        - name: libvirt
+          mountPath: /srv/libvirt
+        securityContext:
+          privileged: true
 #      - name: libvirtkubevirtlockd
 #        image: localhost:5000/libvirtkubevirtlockd
       volumes:
       - name: virtdx509ca
         secret:
           secretName: virtdx509ca
-      - name: virtrun
+      - name: libvirt
         hostPath:
-          path: /run/libvirt
-      - name: dbusrun
+          path: /srv/libvirt
+      - name: dbus
         hostPath:
           path: /run/dbus
-      - name: virtlib
-        hostPath:
-          path: /var/lib/libvirt
-      - name: virtlog
-        hostPath:
-          path: /var/log/libvirt
-      - name: virtetcqemu
-        hostPath:
-          path: /etc/libvirt/qemu
-      - name: virtetcsecrets
-        hostPath:
-          path: /etc/libvirt/secrets
-      - name: virtetcstorage
-        hostPath:
-          path: /etc/libvirt/storage
-      - name: virtetcnwfilter
-        hostPath:
-          path: /etc/libvirt/nwfilter
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup

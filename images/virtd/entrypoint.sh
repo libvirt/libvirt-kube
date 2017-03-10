@@ -1,8 +1,25 @@
 #!/bin/sh
 
+set -e
+
 # This is used by "virsh console" to create lock files.  Technically,
 # "virsh console" uses /var/lock, but that is a symlink to /run/lock.
 mkdir -p /run/lock
+
+bind() {
+    mkdir -p $1
+    mkdir -p $2
+    mount --bind $1 $2
+}
+
+bind /srv/libvirt/etc/qemu /etc/libvirt/qemu
+bind /srv/libvirt/etc/lxc /etc/libvirt/lxc
+bind /srv/libvirt/etc/secrets /etc/libvirt/secrets
+bind /srv/libvirt/etc/storage /etc/libvirt/storage
+bind /srv/libvirt/etc/nwfilter /etc/libvirt/nwfilter
+bind /srv/libvirt/log /var/log/libvirt
+bind /srv/libvirt/lib /var/lib/libvirt
+bind /srv/libvirt/run /run/libvirt
 
 # Make sure permissions on /dev/kvm are correct.
 if [ -c /dev/kvm ]; then
