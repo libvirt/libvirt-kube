@@ -4,4 +4,5 @@ kubectl create -f virtimagefile.yaml
 kubectl create -f virtimagerepo.yaml
 kubectl create -f virtnode.yaml
 kubectl create -f virtmachine.yaml
-sleep 5
+echo "Sleeping 10 secs for TPRs to become activate"
+sleep 10
