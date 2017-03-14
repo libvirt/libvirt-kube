@@ -36,6 +36,8 @@ spec:
           mountPath: /run/dbus
         - name: cgroup
           mountPath: /sys/fs/cgroup
+        - name: shared-images
+          mountPath: /srv/images/shared-images
         securityContext:
           privileged: true
       - name: libvirtkubevirtlogd
@@ -60,3 +62,7 @@ spec:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
+      - name: shared-images
+        nfs:
+          server: 10.33.9.42
+          path: /srv/shared-images
