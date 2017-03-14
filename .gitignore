@@ -3,7 +3,6 @@ vendor/
 *~
 .vendor.status
 *#
-glide.lock
 manifests/libvirt/*pem
 manifests/libvirt/*info
 manifests/libvirt/sec-virtdx509ca.yaml
