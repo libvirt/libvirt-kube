@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rbdadmin
+type: kubernetes.io/rbd
+data:
+  key: QVFDdWRUVllkTmJWRHhBQWpGbFNLeFZUV3IwYkRxNVlWcGU5eXc9PQo=

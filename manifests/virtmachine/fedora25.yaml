@@ -30,17 +30,17 @@ spec:
       threads: 1
     devices:
       disk:
-    #    -
-    #      bootindex: 1
-    #      device: disk
-    #      encrypt:
-    #        luks:
-    #          passphrase: 123456
-    #      source:
-    #        persistentVolume:
-    #          claimName: pvc-rbd1
         -
+          bootindex: 1
           device: disk
+          encrypt:
+            luks:
+              passphrase: 123456
+          source:
+            persistentVolume:
+              claimName: rbd-demo1
+        -
+          device: cdrom
           source:
             imageFile:
               fileName: template-fedora25
