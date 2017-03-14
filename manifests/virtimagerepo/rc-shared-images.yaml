@@ -27,6 +27,10 @@ spec:
         volumeMounts:
           - mountPath: /run/libvirt
             name: libvirt
+        ports:
+          - name: registry
+            containerPort: 80
+            hostPort: 9000
       volumes:
       - name: libvirt
         hostPath:
