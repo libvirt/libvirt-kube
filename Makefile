@@ -1,16 +1,16 @@
 
 COMMANDS = virtkubecri virtkubevmshim virtkubenodeinfo virtkubeimagerepo virtkubevmangel
 
-BINARIES = $(COMMANDS:%=build/%)
+GOPATH = $(shell echo $$GOPATH)
+
+BINARIES = $(COMMANDS:%=$(GOPATH)/bin/%)
 
 SRC = $(shell find pkg -name '*.go')
 
-TEST_DIRS = libvirt/config
-
 all: $(BINARIES)
 
-check:
-	go test $(TEST_DIRS:%=libvirt.org/libvirt-kube/pkg/%)
+clean:
+	for c in $(COMMANDS); do rm -f $(GOPATH)/bin/$$c ; done
 
 $(BINARIES): .vendor.status $(SRC)
 
@@ -22,5 +22,5 @@ $(BINARIES): .vendor.status $(SRC)
 	fi && touch $@
 
 
-build/%: cmd/%
-	go build -o $@ ./$<
+$(GOPATH)/bin/%: cmd/%
+	go install libvirt.org/libvirt-kube/$<
