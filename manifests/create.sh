@@ -1,6 +1,6 @@
 #!/bin/sh
 
-for dir in tpr docker-registry libvirt virtimagerepo virtimagefile virtnode
+for dir in tpr libvirt virtimagerepo virtimagefile virtnode
 do
     echo
     echo $dir

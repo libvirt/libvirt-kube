@@ -33,4 +33,57 @@ building commands
 
   $ make
 
-The generated binaries will get created in the dir build/
+The generated binaries will get created in $GOPATH/bin
+
+Docker images suitable for running the various daemon/services can
+optionally be generated with
+
+  $ make images
+
+Running
+-------
+
+Exampe kubernetes manifest files are provided to illustrate how to
+get the system.
+
+The manifests require that an all-in-one kubernetes cluster is running
+on localhost, allowing privileged containers & providing DNS
+
+  KUBE_ENABLE_CLUSTER_DNS=true ALLOW_PRIVILEGED=1 \
+      ./hack/local-up-cluster.sh -o _output/local/bin/linux/amd64/
+
+(Remove the '-o _output/local/bin/linux/amd64/' part if you've not
+previously compiled k8s)
+
+Then it is neccessary to run a local docker registry:
+
+  $ cd manifests/docker-registry
+  $ ...edit pv-docker-registry.yaml to set storage location...
+  $ ./create.sh
+
+Now build the images and tag them into the registry
+
+  $ make images
+  $ for img in imagerepo nodeinfo virtd virtlod vmangel vmshim; \
+    do \
+      docker tag libvirtkube$img localhost:5000/libvirtkube$img; \
+      docker push  localhost:5000/libvirtkube$img; \
+    done
+
+Finally it is possible to launch all the pieces
+
+  $ cd manifests
+  $ cd libvirt
+  $ ....edit ds-libvirt.yaml to set the storage location at bottom...
+  $ cd ..
+  $ ./create.sh
+
+In the manifests/virtmachine directory there are files which can
+be used to create a virtual machine instance.
+
+  $ cd manifests/virtmachine
+  $ ....edit pv-rbd-demo1.yaml to set storage location....
+  $ for f in *.yaml; \
+    do \
+      kubectl create -f $f; \
+    done
