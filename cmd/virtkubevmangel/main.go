@@ -54,13 +54,13 @@ func main() {
 
 	if *pod == "" {
 		*pod = os.Getenv("LIBVIRT_KUBE_VM_ANGEL_POD")
-		if pod == "" {
+		if *pod == "" {
 			fmt.Println("Pod name cannot be empty")
 			os.Exit(1)
 		}
 	}
 
-	if machine == "" {
+	if *machine == "" {
 		fmt.Println("Machine name cannot be empty")
 		os.Exit(1)
 	}
