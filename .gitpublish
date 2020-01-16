@@ -1,4 +1,4 @@
 [gitpublishprofile "default"]
 base = master
 to = libvir-list@redhat.com
-prefix = kube PATCH
+prefix = libvirt-kube PATCH
